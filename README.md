@@ -26,7 +26,7 @@
 
 ***
 
-### Enjoy and please CC-BY-NC-SA :)
+### Enjoy and please CC BY-NC-SA :)
 
 ***
 
