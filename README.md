@@ -14,6 +14,8 @@
 
 ### Search, filter and explore Monster MIDI Dataset :)
 
+#### NOTE: Google Colab Pro or Pro+ subscription is required to use the provided colab/code because of the size of the dataset and its data files
+
 ***
 
 ### Project Los Angeles
