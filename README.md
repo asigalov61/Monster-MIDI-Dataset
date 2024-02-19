@@ -14,7 +14,17 @@
 
 ### Search, filter and explore Monster MIDI Dataset :)
 
-#### NOTE: Google Colab Pro or Pro+ subscription is required to use the provided colab/code because of the size of the dataset and its data files
+#### PLEASE NOTE: Google Colab Pro or Pro+ subscription/A100 GPU is required to use the provided colab/code because of the size of the dataset and its data files
+
+***
+
+## Monster MIDI Dataset Sample Search Results
+
+### Here are the [Monster MIDI Dataset Sample Search Results](https://huggingface.co/datasets/projectlosangeles/Monster-MIDI-Dataset/blob/main/Monster-MIDI-Dataset-Ver-1-0-CC-BY-NC-SA.zip)
+
+### It takes about one hour on A100 GPU to do a full search on 285 source MIDIs
+
+### Enjoy and please CC-BY-NC-SA :)
 
 ***
 
