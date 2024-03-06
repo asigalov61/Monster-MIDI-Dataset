@@ -26,6 +26,20 @@
 
 ***
 
+## Monster Music Transformer
+
+### Here is the large model trained on the full Monster MIDI Dataset to demo the dataset in action :)
+
+[![Open In Colab][colab-badge]][colab-notebook2]
+
+[colab-notebook2]: <https://colab.research.google.com/github/asigalov61/Monster-MIDI-Dataset/blob/main/Monster_Music_Transformer.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### Model was trained on full Monster MIDI Dataset for 65 hours (1 epoch) @ 4 batches on a single H100 GPU
+### This model can be used for music generation/composition or for (dataset) embeddings exploration
+
+***
+
 ### Enjoy and please CC BY-NC-SA :)
 
 ***
