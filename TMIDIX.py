@@ -4707,23 +4707,62 @@ def augment_enhanced_score_notes(enhanced_score_notes,
 
 ###################################################################################
 
+def stack_list(lst, base=12):
+    return sum(j * base**i for i, j in enumerate(lst[::-1]))
+
+def destack_list(num, base=12):
+    lst = []
+    while num:
+        lst.append(num % base)
+        num //= base
+    return lst[::-1]
+
+###################################################################################
+
 def extract_melody(chordified_enhanced_score, 
-                    melody_range=[60, 84], 
+                    melody_range=[48, 84], 
                     melody_channel=0,
-                    melody_patch=0
+                    melody_patch=0,
+                    melody_velocity=0,
+                    stacked_melody=False,
+                    stacked_melody_base_pitch=60
                   ):
 
-    melody_score = copy.deepcopy([c[0] for c in chordified_enhanced_score if c[0][3] != 9])
-    
-    for e in melody_score:
-        e[3] = melody_channel
-        e[6] = melody_patch
+    if stacked_melody:
 
-        if e[4] < melody_range[0]:
-            e[4] = (e[4] % 12) + melody_range[0]
-            
-        if e[4] >= melody_range[1]:
-            e[4] = (e[4] % 12) + (melody_range[1]-12)
+      
+      all_pitches_chords = []
+      for e in chordified_enhanced_score:
+        all_pitches_chords.append(sorted(set([p[4] for p in e]), reverse=True))
+      
+      melody_score = []
+      for i, chord in enumerate(chordified_enhanced_score):
+
+        if melody_velocity > 0:
+          vel = melody_velocity
+        else:
+          vel = chord[0][5]
+
+        melody_score.append(['note', chord[0][1], chord[0][2], melody_channel, stacked_melody_base_pitch+(stack_list([p % 12 for p in all_pitches_chords[i]]) % 12), vel, melody_patch])
+  
+    else:
+
+      melody_score = copy.deepcopy([c[0] for c in chordified_enhanced_score if c[0][3] != 9])
+      
+      for e in melody_score:
+        
+          e[3] = melody_channel
+
+          if melody_velocity > 0:
+            e[5] = melody_velocity
+
+          e[6] = melody_patch
+
+          if e[4] < melody_range[0]:
+              e[4] = (e[4] % 12) + melody_range[0]
+              
+          if e[4] >= melody_range[1]:
+              e[4] = (e[4] % 12) + (melody_range[1]-12)
 
     return fix_monophonic_score_durations(melody_score)
 
@@ -4957,6 +4996,57 @@ def patch_enhanced_score_notes(enhanced_score_notes,
         print('=' * 70)
 
     return enhanced_score_notes_with_patch_changes, patches, overflow_patches
+
+###################################################################################
+
+def create_enhanced_monophonic_melody(monophonic_melody):
+
+    enhanced_monophonic_melody = []
+
+    for i, note in enumerate(monophonic_melody[:-1]):
+
+      enhanced_monophonic_melody.append(note)
+
+      if note[1]+note[2] < monophonic_melody[i+1][1]:
+        
+        delta_time = monophonic_melody[i+1][1] - (note[1]+note[2])
+        enhanced_monophonic_melody.append(['silence', note[1]+note[2], delta_time, note[3], 0, 0, note[6]])
+        
+    enhanced_monophonic_melody.append(monophonic_melody[-1])
+
+    return enhanced_monophonic_melody
+
+###################################################################################
+
+def frame_monophonic_melody(monophonic_melody, min_frame_time_threshold=10):
+
+    mzip = list(zip(monophonic_melody[:-1], monophonic_melody[1:]))
+
+    times_counts = Counter([(b[1]-a[1]) for a, b in mzip]).most_common()
+
+    mc_time = next((item for item, count in times_counts if item >= min_frame_time_threshold), min_frame_time_threshold)
+
+    times = [(b[1]-a[1]) // mc_time for a, b in mzip] + [monophonic_melody[-1][2] // mc_time]
+
+    framed_melody = []
+
+    for i, note in enumerate(monophonic_melody):
+      
+      stime = note[1]
+      count = times[i]
+      
+      if count != 0:
+        for j in range(count):
+
+          new_note = copy.deepcopy(note)
+          new_note[1] = stime + (j * mc_time)
+          new_note[2] = mc_time
+          framed_melody.append(new_note)
+      
+      else:
+        framed_melody.append(note)
+
+    return [framed_melody, mc_time]
 
 ###################################################################################
 
