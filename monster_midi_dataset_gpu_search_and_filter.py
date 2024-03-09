@@ -291,8 +291,8 @@ if filez:
                       checked_tones_chord = TMIDIX.check_and_fix_tones_chord(tones_chord)
                       sig_token = TMIDIX.ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
 
-                  elif len(pitches) == 1:
-                    sig_token = pitches[0]
+                elif len(pitches) == 1:
+                  sig_token = pitches[0]
 
                 sig.append(sig_token)
 
