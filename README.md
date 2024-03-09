@@ -24,6 +24,8 @@
 
 ### It takes about one hour on A100 GPU to do a full search on 285 source MIDIs
 
+### Please also check out [Quad Music Transformer](https://github.com/asigalov61/Quad-Music-Transformer) which was trained using these sample search results
+
 ***
 
 ## Monster Music Transformer
