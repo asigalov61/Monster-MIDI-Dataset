@@ -108,7 +108,7 @@ print('=' * 70)
 
 print('=' * 70)
 print('Unzipping Monster MIDI Dataset...Please wait...')
-!unzip 'Monster-MIDI-Dataset-Ver-1-0-CC-BY-NC-SA.zip'
+!unzip 'Monster-MIDI-Dataset-Ver-1-0-CC-BY-NC-SA.zip' > /dev/null
 print('=' * 70)
 
 print('Done! Enjoy! :)')
