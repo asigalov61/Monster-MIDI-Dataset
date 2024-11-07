@@ -158,7 +158,7 @@ print('=' * 70)
 random.shuffle(sigs_data)
 
 signatures_file_names = []
-sigs_matrixes = [ [0]*(len(TMIDIX.ALL_CHORDS)+256) for i in range(len(sigs_data))]
+sigs_matrixes = [ [0]*(len(TMIDIX.ALL_CHORDS_SORTED)+256) for i in range(len(sigs_data))]
 
 idx = 0
 for s in tqdm(sigs_data):
@@ -265,12 +265,18 @@ if filez:
 
           #=======================================================
 
-          raw_score = TMIDIX.midi2single_track_ms_score(open(f, 'rb').read())
-          escore = TMIDIX.advanced_score_processor(raw_score, return_score_analysis=False, return_enhanced_score_notes=True)[0]
+          raw_score = TMIDIX.midi2single_track_ms_score(f)
+          escore = TMIDIX.advanced_score_processor(raw_score, return_enhanced_score_notes=True)[0]
 
           for e in escore:
             e[1] = int(e[1] / 16)
             e[2] = int(e[2] / 16)
+
+          # Sorting by patch, pitch, then by start-time
+
+          escore.sort(key=lambda x: x[6])
+          escore.sort(key=lambda x: x[4], reverse=True)
+          escore.sort(key=lambda x: x[1])
 
           drums_offset = len(TMIDIX.ALL_CHORDS_SORTED) + 128
 
@@ -319,7 +325,7 @@ if filez:
 
             fsig = [list(v) for v in sig_p.items()]
 
-            src_sig_mat = [0] * (len(TMIDIX.ALL_CHORDS)+256)
+            src_sig_mat = [0] * (len(TMIDIX.ALL_CHORDS_SORTED)+256)
 
             for s in fsig:
 
@@ -528,7 +534,7 @@ else:
 
   kilo_chords_file_names = []
 
-  kilo_chords_matrixes = [ [0]*(len(TMIDIX.ALL_CHORDS)+128) for i in range(len(kilo_chords))]
+  kilo_chords_matrixes = [ [0]*(len(TMIDIX.ALL_CHORDS_SORTED)+128) for i in range(len(kilo_chords))]
 
   idx = 0
   for kc in tqdm(kilo_chords):
@@ -627,12 +633,18 @@ if filez:
 
           #=======================================================
 
-          raw_score = TMIDIX.midi2single_track_ms_score(open(f, 'rb').read())
-          escore = TMIDIX.advanced_score_processor(raw_score, return_score_analysis=False, return_enhanced_score_notes=True)[0]
+          raw_score = TMIDIX.midi2single_track_ms_score(f)
+          escore = TMIDIX.advanced_score_processor(raw_score, return_enhanced_score_notes=True)[0]
 
           for e in escore:
             e[1] = int(e[1] / 16)
             e[2] = int(e[2] / 16)
+
+          # Sorting by patch, pitch, then by start-time
+
+          escore.sort(key=lambda x: x[6])
+          escore.sort(key=lambda x: x[4], reverse=True)
+          escore.sort(key=lambda x: x[1])
 
           src_kilo_chords = []
 
@@ -673,7 +685,7 @@ if filez:
 
             else:
 
-              kilo_chord_matrix = [0] * (len(TMIDIX.ALL_CHORDS)+128)
+              kilo_chord_matrix = [0] * (len(TMIDIX.ALL_CHORDS_SORTED)+128)
 
               for c in kilo_chord:
                 kilo_chord_matrix[c] += 1
