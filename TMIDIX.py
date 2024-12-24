@@ -4690,7 +4690,8 @@ def augment_enhanced_score_notes(enhanced_score_notes,
                                   pitch_shift=0,
                                   ceil_timings=False,
                                   round_timings=False,
-                                  legacy_timings=True
+                                  legacy_timings=True,
+                                  sort_drums_last=False
                                 ):
 
     esn = copy.deepcopy(enhanced_score_notes)
@@ -4740,6 +4741,9 @@ def augment_enhanced_score_notes(enhanced_score_notes,
       esn.sort(key=lambda x: x[6])
       esn.sort(key=lambda x: x[4], reverse=True)
       esn.sort(key=lambda x: x[1])
+      
+    if sort_drums_last:
+        esn.sort(key=lambda x: (x[1], -x[4], x[6]) if x[6] != 128 else (x[1], x[6], -x[4]))
 
     return esn
 
@@ -7883,19 +7887,21 @@ def solo_piano_escore_notes(escore_notes,
     chord = []
 
     for cc in c:
-      if cc[pitches_index] not in seen:
 
-          if cc[channels_index] != 9:
+      if cc[channels_index] != 9:
+        if cc[pitches_index] not in seen:
+            
             cc[channels_index] = 0
             cc[patches_index] = 0
-            
+        
             chord.append(cc)
             seen.append(cc[pitches_index])
-          
-          else:
-            if keep_drums:
+      
+      else:
+        if keep_drums:
+          if cc[pitches_index]+128 not in seen:
               chord.append(cc)
-              seen.append(cc[pitches_index])
+              seen.append(cc[pitches_index]+128)
 
     sp_escore_notes.append(chord)
 
@@ -9111,7 +9117,269 @@ def count_bad_chords_in_chordified_score(chordified_score,
       if tones_chord not in CHORDS:
         bad_chords_count += 1
 
-  return [bad_chords_count, len(chordified_score)] 
+  return [bad_chords_count, len(chordified_score)]
+
+###################################################################################
+
+def needleman_wunsch_aligner(seq1,
+                             seq2,
+                             align_idx,
+                             gap_penalty=-1,
+                             match_score=2,
+                             mismatch_penalty=-1
+                             ):
+    
+    n = len(seq1)
+    m = len(seq2)
+    
+    score_matrix = [[0] * (m + 1) for _ in range(n + 1)]
+
+    for i in range(1, n + 1):
+        score_matrix[i][0] = gap_penalty * i
+    for j in range(1, m + 1):
+        score_matrix[0][j] = gap_penalty * j
+
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            match = score_matrix[i-1][j-1] + (match_score if seq1[i-1][align_idx] == seq2[j-1][align_idx] else mismatch_penalty)
+            delete = score_matrix[i-1][j] + gap_penalty
+            insert = score_matrix[i][j-1] + gap_penalty
+            score_matrix[i][j] = max(match, delete, insert)
+
+    align1, align2 = [], []
+    i, j = n, m
+    
+    while i > 0 and j > 0:
+        
+        score = score_matrix[i][j]
+        score_diag = score_matrix[i-1][j-1]
+        score_up = score_matrix[i-1][j]
+        score_left = score_matrix[i][j-1]
+
+        if score == score_diag + (match_score if seq1[i-1][align_idx] == seq2[j-1][align_idx] else mismatch_penalty):
+            align1.append(seq1[i-1])
+            align2.append(seq2[j-1])
+            i -= 1
+            j -= 1
+        elif score == score_up + gap_penalty:
+            align1.append(seq1[i-1])
+            align2.append([None] * 6)
+            i -= 1
+        elif score == score_left + gap_penalty:
+            align1.append([None] * 6)
+            align2.append(seq2[j-1])
+            j -= 1
+
+    while i > 0:
+        align1.append(seq1[i-1])
+        align2.append([None] * 6)
+        i -= 1
+    while j > 0:
+        align1.append([None] * 6)
+        align2.append(seq2[j-1])
+        j -= 1
+
+    align1.reverse()
+    align2.reverse()
+
+    return align1, align2
+
+###################################################################################
+
+def align_escore_notes_to_escore_notes(src_escore_notes,
+                                       trg_escore_notes,
+                                       recalculate_scores_timings=True,
+                                       pitches_idx=4
+                                       ):
+    
+    if recalculate_scores_timings:
+        src_escore_notes = recalculate_score_timings(src_escore_notes)
+        trg_escore_notes = recalculate_score_timings(trg_escore_notes)
+        
+    src_align1, trg_align2 = needleman_wunsch_aligner(src_escore_notes, trg_escore_notes, pitches_idx)
+
+    aligned_scores = [[al[0], al[1]] for al in zip(src_align1, trg_align2) if al[0][0] is not None and al[1][0] is not None]
+    
+    return aligned_scores
+
+###################################################################################
+
+def t_to_n(arr, si, t):
+
+    ct = 0
+    ci = si
+    
+    while ct + arr[ci][1] < t and ci < len(arr)-1:
+        ct += arr[ci][1]
+        ci += 1
+
+    return ci+1
+
+###################################################################################
+
+def max_sum_chunk_idxs(arr, t=255):
+
+    n = t_to_n(arr, 0, t)
+    
+    if n > len(arr):
+        return [0, n]
+
+    max_sum = 0
+    max_sum_start_index = 0
+    
+    max_sum_start_idxs = [0, len(arr), sum([a[0] for a in arr])]
+
+    for i in range(len(arr)):
+
+        n = t_to_n(arr, i, t)
+
+        current_sum  = sum([a[0] for a in arr[i:n]])
+        current_time = sum([a[1] for a in arr[i:n]])
+
+        if current_sum > max_sum and current_time <= t:
+            max_sum = current_sum
+            max_sum_start_idxs = [i, n, max_sum]
+
+    return max_sum_start_idxs
+
+###################################################################################
+
+def find_highest_density_escore_notes_chunk(escore_notes, max_chunk_time=512):
+
+    dscore = delta_score_notes(escore_notes)
+    
+    cscore = chordify_score([d[1:] for d in dscore])
+
+    notes_counts = [[len(c), c[0][0]] for c in cscore]
+
+    msc_idxs = max_sum_chunk_idxs(notes_counts, max_chunk_time)
+
+    chunk_dscore = [['note'] + c for c in flatten(cscore[msc_idxs[0]:msc_idxs[1]])]
+
+    chunk_escore = recalculate_score_timings(delta_score_to_abs_score(chunk_dscore))
+    
+    return chunk_escore
+
+###################################################################################
+
+def advanced_add_drums_to_escore_notes(escore_notes,
+                                       main_beat_min_dtime=5,
+                                       main_beat_dtime_thres=1,
+                                       drums_durations_value=2,
+                                       drums_pitches_velocities=[(36, 100), 
+                                                                 (38, 100), 
+                                                                 (41, 125)],
+                                       recalculate_score_timings=True,
+                                       intro_drums_count=4,
+                                       intro_drums_time_k=4,
+                                       intro_drums_pitch_velocity=[37, 110]
+                                      ):
+
+    #===========================================================
+    
+    new_dscore = delta_score_notes(escore_notes)
+
+    times = [d[1] for d in new_dscore if d[1] != 0]
+
+    time = [c[0] for c in Counter(times).most_common() if c[0] >= main_beat_min_dtime][0]
+
+    #===========================================================
+
+    if intro_drums_count > 0:
+
+        drums_score = []
+
+        for i in range(intro_drums_count):
+
+            if i == 0:
+                dtime = 0
+
+            else:
+                dtime = time
+            
+            drums_score.append(['note', 
+                                dtime * intro_drums_time_k, 
+                                drums_durations_value, 
+                                9, 
+                                intro_drums_pitch_velocity[0], 
+                                intro_drums_pitch_velocity[1], 
+                                128]
+                              )
+            
+        new_dscore[0][1] = time * intro_drums_time_k
+
+        new_dscore = drums_score + new_dscore
+
+    #===========================================================
+
+    for e in new_dscore:
+    
+        if abs(e[1] - time) == main_beat_dtime_thres:
+            e[1] = time
+
+        if recalculate_score_timings:
+        
+            if e[1] % time != 0 and e[1] > time:
+                if e[1] % time < time // 2:
+                    e[1] -= e[1] % time
+        
+                else:
+                    e[1] += time - (e[1] % time)
+
+    #===========================================================
+
+    drums_score = []
+    
+    dtime = 0
+    
+    idx = 0
+    
+    for i, e in enumerate(new_dscore):
+        
+        drums_score.append(e)
+        
+        dtime += e[1]
+
+        if e[1] != 0:
+            idx += 1
+
+        if i >= intro_drums_count:
+    
+            if (e[1] % time == 0 and e[1] != 0) or i == 0:
+                
+                if idx % 2 == 0 and e[1] != 0:
+                    drums_score.append(['note', 
+                                        0, 
+                                        drums_durations_value, 
+                                        9, 
+                                        drums_pitches_velocities[0][0], 
+                                        drums_pitches_velocities[0][1], 
+                                        128]
+                                      )
+                    
+                if idx % 2 != 0 and e[1] != 0:
+                    drums_score.append(['note', 
+                                        0, 
+                                        drums_durations_value, 
+                                        9, 
+                                        drums_pitches_velocities[1][0], 
+                                        drums_pitches_velocities[1][1], 
+                                        128]
+                                      )
+        
+                if idx % 4 == 0 and e[1] != 0:
+                    drums_score.append(['note', 
+                                        0, 
+                                        drums_durations_value, 
+                                        9, 
+                                        drums_pitches_velocities[2][0], 
+                                        drums_pitches_velocities[2][1], 
+                                        128]
+                                      )
+
+    #===========================================================
+    
+    return delta_score_to_abs_score(drums_score)
 
 ###################################################################################
 #  
