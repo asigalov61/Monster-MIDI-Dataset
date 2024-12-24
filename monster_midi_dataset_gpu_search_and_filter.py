@@ -32,6 +32,7 @@ Powered by tegridy-tools: https://github.com/asigalov61/tegridy-tools
 
 !git clone --depth 1 https://github.com/asigalov61/Monster-MIDI-Dataset
 !pip install huggingface_hub
+!pip install hf_transfer
 
 #@title Import all needed modules
 
@@ -46,6 +47,8 @@ from tqdm import tqdm
 import pprint
 import statistics
 import shutil
+
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 try:
   import locale
@@ -268,15 +271,7 @@ if filez:
           raw_score = TMIDIX.midi2single_track_ms_score(f)
           escore = TMIDIX.advanced_score_processor(raw_score, return_enhanced_score_notes=True)[0]
 
-          for e in escore:
-            e[1] = int(e[1] / 16)
-            e[2] = int(e[2] / 16)
-
-          # Sorting by patch, pitch, then by start-time
-
-          escore.sort(key=lambda x: x[6])
-          escore.sort(key=lambda x: x[4], reverse=True)
-          escore.sort(key=lambda x: x[1])
+          escore = TMIDIX.augment_enhanced_score_notes(escore)
 
           drums_offset = len(TMIDIX.ALL_CHORDS_SORTED) + 128
 
@@ -308,7 +303,7 @@ if filez:
                   try:
                       sig_token = TMIDIX.ALL_CHORDS_SORTED.index(tones_chord) + 128
                   except:
-                      checked_tones_chord = TMIDIX.advanced_check_and_fix_tones_chord(tones_chord, pitches[0])
+                      checked_tones_chord = TMIDIX.advanced_check_and_fix_tones_chord(tones_chord)
                       sig_token = TMIDIX.ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
 
                 elif len(pitches) == 1:
@@ -636,15 +631,7 @@ if filez:
           raw_score = TMIDIX.midi2single_track_ms_score(f)
           escore = TMIDIX.advanced_score_processor(raw_score, return_enhanced_score_notes=True)[0]
 
-          for e in escore:
-            e[1] = int(e[1] / 16)
-            e[2] = int(e[2] / 16)
-
-          # Sorting by patch, pitch, then by start-time
-
-          escore.sort(key=lambda x: x[6])
-          escore.sort(key=lambda x: x[4], reverse=True)
-          escore.sort(key=lambda x: x[1])
+          escore = TMIDIX.augment_enhanced_score_notes(escore)
 
           src_kilo_chords = []
 
@@ -670,7 +657,7 @@ if filez:
                   try:
                       chord_token = TMIDIX.ALL_CHORDS_SORTED.index(tones_chord) + 128
                   except:
-                      checked_tones_chord = TMIDIX.advanced_check_and_fix_tones_chord(tones_chord, pitches[0])
+                      checked_tones_chord = TMIDIX.advanced_check_and_fix_tones_chord(tones_chord)
                       chord_token = TMIDIX.ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
 
                 elif len(pitches) == 1:
