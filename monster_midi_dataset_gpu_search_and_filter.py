@@ -303,7 +303,7 @@ if filez:
                   try:
                       sig_token = TMIDIX.ALL_CHORDS_SORTED.index(tones_chord) + 128
                   except:
-                      checked_tones_chord = TMIDIX.advanced_check_and_fix_tones_chord(tones_chord)
+                      checked_tones_chord = TMIDIX.check_and_fix_tones_chord(tones_chord)
                       sig_token = TMIDIX.ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
 
                 elif len(pitches) == 1:
@@ -657,7 +657,7 @@ if filez:
                   try:
                       chord_token = TMIDIX.ALL_CHORDS_SORTED.index(tones_chord) + 128
                   except:
-                      checked_tones_chord = TMIDIX.advanced_check_and_fix_tones_chord(tones_chord)
+                      checked_tones_chord = TMIDIX.check_and_fix_tones_chord(tones_chord)
                       chord_token = TMIDIX.ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
 
                 elif len(pitches) == 1:
