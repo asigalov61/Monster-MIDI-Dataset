@@ -9762,7 +9762,6 @@ def escore_notes_to_text_description(escore_notes,
             
             description += 'This ' + mood + ' melody has '
             
-                
         else:
             description += 'TThis drum track has '
             
@@ -9776,19 +9775,17 @@ def escore_notes_to_text_description(escore_notes,
         if instruments:
             
             if comp_type not in ['monophonic melody', 'drum track']:
+                
                 description += 'The song '
                 
-            else:
-                description += 'The melody '
-
-            if len(instruments) == 1:
-                description += 'is played on a solo ' + instruments[0] + '.'
+                if len(instruments) > 1:
                 
-                description += '\n'
-
-            else:
-                description += 'features ' + NUMERALS[max(0, min(15, len(instruments)-1))] + ' instruments: '
-                description += ', '.join(instruments[:-1]) + ' and ' + instruments[-1] + '.'
+                    description += 'features ' + NUMERALS[max(0, min(15, len(instruments)-1))] + ' instruments: '
+                    description += ', '.join(instruments[:-1]) + ' and ' + instruments[-1] + '.'
+                    
+                else:
+                    description += 'features one instrument: ' + instruments[0] + '.'
+                    
                 
                 description += '\n'
                 
@@ -9829,7 +9826,7 @@ def escore_notes_to_text_description(escore_notes,
                 description += 'The song has ' + NUMERALS[len(lead_melodies)-1] + ' distinct lead ' + mword + ' played on '
                 
                 if len(lead_melodies) > 1:               
-                    description += ', '.join(lead_melodies[:-1][0]) + ' and ' + lead_melodies[-1][0] + '.'
+                    description += ', '.join([l[0] for l in lead_melodies[:-1]]) + ' and ' + lead_melodies[-1][0] + '.'
                     
                 else:
                     description += lead_melodies[0][0] + '.'
@@ -9847,7 +9844,7 @@ def escore_notes_to_text_description(escore_notes,
                 description += 'The song has ' + NUMERALS[len(base_melodies)-1] + ' distinct base ' + mword + ' played on '
                 
                 if len(base_melodies) > 1:               
-                    description += ', '.join(base_melodies[:-1][0]) + ' and ' + base_melodies[-1][0] + '.'
+                    description += ', '.join([b[0] for b in base_melodies[:-1]]) + ' and ' + base_melodies[-1][0] + '.'
                     
                 else:
                     description += base_melodies[0][0] + '.'
@@ -9865,7 +9862,7 @@ def escore_notes_to_text_description(escore_notes,
                 description += 'The song has ' + NUMERALS[len(lead_melodies)-1] + ' distinct lead ' + lmword + ' played on '
                 
                 if len(lead_melodies) > 1:               
-                    description += ', '.join(lead_melodies[:-1][0]) + ' and ' + lead_melodies[-1][0] + '.'
+                    description += ', '.join([l[0] for l in lead_melodies[:-1]]) + ' and ' + lead_melodies[-1][0] + '.'
                     
                 else:
                     description += lead_melodies[0][0] + '.'
@@ -9879,7 +9876,7 @@ def escore_notes_to_text_description(escore_notes,
                 description += ' And ' + NUMERALS[len(base_melodies)-1] + ' distinct base ' + bmword + ' played on '
                 
                 if len(base_melodies) > 1:               
-                    description += ', '.join(base_melodies[:-1][0]) + ' and ' + base_melodies[-1][0] + '.'
+                    description += ', '.join([b[0] for b in base_melodies[:-1]]) + ' and ' + base_melodies[-1][0] + '.'
                     
                 else:
                     description += base_melodies[0][0] + '.'
@@ -11048,7 +11045,7 @@ LEAD_INSTRUMENTS = [0, 1, 2, 3, 4, 5, 6, 7, # Piano
                     8, 9, 10, 11, 12, 13, 14, 15, # Chromatic Percussion
                     16, 17, 18, 19, 20, 21, 22, 23, # Organ
                     24, 25, 26, 27, 28, 29, 30, 31, # Guitar
-                    40, 41, # Strings
+                    40, 41, 46, # Strings
                     52, 53, 54, # Ensemble
                     56, 57, 59, 60, # Brass
                     64, 65, 66, 67, 68, 69, 70, 71, # Reed
