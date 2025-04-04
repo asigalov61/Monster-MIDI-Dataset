@@ -1941,7 +1941,8 @@ def search_and_filter(sigs_dicts,
                       output_dir = './Output-MIDI-Dataset/',
                       number_of_top_matches_to_copy = 30,
                       transpose_factor=6,
-                      covert_counts_to_ratios=True
+                      covert_counts_to_ratios=True,
+                      omit_drums=True
                      ):
 
     transpose_factor = max(0, min(6, transpose_factor))
@@ -1970,7 +1971,8 @@ def search_and_filter(sigs_dicts,
     
         trg_sigs = get_MIDI_signature(midi,
                                       transpose_factor=transpose_factor,
-                                      covert_counts_to_ratios=covert_counts_to_ratios
+                                      covert_counts_to_ratios=covert_counts_to_ratios,
+                                      omit_drums=omit_drums
                                       )
     
         tv = list(range(tsidx, teidx))
