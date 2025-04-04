@@ -1700,7 +1700,7 @@ def advanced_score_processor(raw_score,
 
 ###################################################################################
 
-def load_signatures(signatures_data, covert_counts_to_ratios=True, omit_drums=True):
+def load_signatures(signatures_data, covert_counts_to_ratios=False, omit_drums=True):
 
     sigs_dicts = []
     
@@ -1815,7 +1815,7 @@ def get_distances_np(trg_signature_dictionary,
 
 def get_MIDI_signature(path_to_MIDI_file,
                        transpose_factor=0,
-                       covert_counts_to_ratios=True,
+                       covert_counts_to_ratios=False,
                        omit_drums=True
                       ):
 
