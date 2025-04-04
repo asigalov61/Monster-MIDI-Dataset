@@ -8,7 +8,7 @@ r'''############################################################################
 #	Tegridy MIDI X Module (TMIDI X / tee-midi eks)
 #	Version 1.0
 #
-#   NOTE: TMIDI X Module starts after the partial MIDI.py module @ line 1342
+#   NOTE: TMIDI X Module starts after the partial MIDI.py module @ line 1438
 #
 #	Based upon MIDI.py module v.6.7. by Peter Billam / pjb.com.au
 #
@@ -21,19 +21,19 @@ r'''############################################################################
 #
 ###################################################################################
 ###################################################################################
-#       Copyright 2025 Project Los Angeles / Tegridy Code
+#   Copyright 2025 Project Los Angeles / Tegridy Code
 #
-#       Licensed under the Apache License, Version 2.0 (the "License");
-#       you may not use this file except in compliance with the License.
-#       You may obtain a copy of the License at
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
 #
-#           http://www.apache.org/licenses/LICENSE-2.0
+#       http://www.apache.org/licenses/LICENSE-2.0
 #
-#       Unless required by applicable law or agreed to in writing, software
-#       distributed under the License is distributed on an "AS IS" BASIS,
-#       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#       See the License for the specific language governing permissions and
-#       limitations under the License.
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
 ###################################################################################
 ###################################################################################
 #
@@ -1446,8 +1446,9 @@ def _encode(events_lol, unknown_callback=None, never_add_eot=False,
 #	pjb.com.au
 #
 #	Project Los Angeles
-#	Tegridy Code 2021
-# https://github.com/Tegridy-Code/Project-Los-Angeles
+#	Tegridy Code 2025
+#
+#   https://github.com/Tegridy-Code/Project-Los-Angeles
 #
 ###################################################################################
 ###################################################################################
@@ -1471,6 +1472,8 @@ import csv
 
 import tqdm
 
+import multiprocessing
+
 from itertools import zip_longest
 from itertools import groupby
 from collections import Counter
@@ -1487,6 +1490,10 @@ import statistics
 import math
 
 import matplotlib.pyplot as plt
+
+import psutil
+
+from collections import defaultdict
 
 ###################################################################################
 #
@@ -5589,7 +5596,7 @@ def split_melody(enhanced_melody_score_notes,
   for e in enhanced_melody_score_notes:
     dtime = max(0, min(max_score_time, e[1]-pe[1]))
 
-    if dtime > max(durs):
+    if dtime > stime:
       if chu:
         mel_chunks.append(chu)
       chu = []
@@ -9603,7 +9610,7 @@ def escore_notes_to_text_description(escore_notes,
 
     all_patches = [e[6] for e in escore_notes]
 
-    patches = ordered_set(all_patches)
+    patches = ordered_set(all_patches)[:16]
     
     instruments = [alpha_str(Number2patch[p]) for p in patches if p < 128]
     
@@ -11089,7 +11096,273 @@ def escore_notes_pitches_range(escore_notes,
         return [ -1] * 6
 
 ###################################################################################
-#  
+
+def escore_notes_core(escore_notes, core_len=128):
+
+    cscore = chordify_score([1000, escore_notes])
+
+    chords = []
+    chords_idxs = []
+    
+    for i, c in enumerate(cscore):
+        
+        pitches = [e[4] for e in c if e[3] != 9]
+
+        if pitches:
+            tones_chord = sorted(set([p % 12 for p in pitches]))
+
+            if tones_chord not in ALL_CHORDS_SORTED:
+                tones_chord = check_and_fix_tones_chord(tones_chord)
+
+            chords.append(ALL_CHORDS_SORTED.index(tones_chord))
+            chords_idxs.append(i)
+
+    mid = len(chords_idxs) // 2
+    clen = core_len // 2
+    
+    sidx = chords_idxs[mid-clen]
+    eidx = chords_idxs[mid+clen]
+
+    core_chords = chords[mid-clen:mid+clen]
+    core_score = flatten(cscore[sidx:eidx])
+    
+    return core_score, core_chords
+
+###################################################################################
+
+def multiprocessing_wrapper(function, data_list):
+    
+    with multiprocessing.Pool() as pool:
+        
+        results = []
+        
+        for result in tqdm.tqdm(pool.imap_unordered(function, data_list), total=len(data_list)):
+            results.append(result)
+            
+    return results
+
+###################################################################################
+
+def rle_encode_ones(matrix, div_mod=-1):
+    
+    flat_list = [val for row in matrix for val in row]
+    
+    encoding = []
+    i = 0
+    
+    while i < len(flat_list):
+        
+        if flat_list[i] == 1:
+            
+            start_index = i
+            count = 1
+            i += 1
+            
+            while i < len(flat_list) and flat_list[i] == 1:
+                count += 1
+                i += 1
+            
+            if div_mod > 0:
+                encoding.append((start_index // div_mod, start_index % div_mod))
+                
+            else:
+                encoding.append(start_index)
+            
+        else:
+            i += 1
+            
+    return encoding
+
+###################################################################################
+
+def rle_decode_ones(encoding, size=(128, 128)):
+    
+    flat_list = [0] * (size[0] * size[1])
+    
+    for start_index in encoding:
+        flat_list[start_index] = 1
+        
+    matrix = [flat_list[i * size[1]:(i + 1) * size[1]] for i in range(size[0])]
+    
+    return matrix
+
+###################################################################################
+
+def vertical_list_search(list_of_lists, trg_list):
+
+    src_list = list_of_lists
+    
+    if not src_list or not trg_list:
+        return []
+    
+    num_rows = len(src_list)
+    k = len(trg_list)
+    
+    row_sets = [set(row) for row in src_list]
+    
+    results = []
+    
+    for start in range(num_rows - k + 1):
+        valid = True
+        
+        for offset, target in enumerate(trg_list):
+
+            if target not in row_sets[start + offset]:
+                valid = False
+                break
+                
+        if valid:
+            results.append(list(range(start, start + k)))
+            
+    return results
+    
+###################################################################################
+
+def smooth_values(values, window_size=3):
+
+    smoothed = []
+    
+    for i in range(len(values)):
+
+        start = max(0, i - window_size // 2)
+        end = min(len(values), i + window_size // 2 + 1)
+        
+        window = values[start:end]
+        
+        smoothed.append(int(sum(window) / len(window)))
+        
+    return smoothed
+
+###################################################################################
+
+def is_mostly_wide_peaks_and_valleys(values, 
+                                     min_range=32, 
+                                     threshold=0.7, 
+                                     smoothing_window=5
+                                    ):
+
+    if not values:
+        return False
+
+    smoothed_values = smooth_values(values, smoothing_window)
+
+    value_range = max(smoothed_values) - min(smoothed_values)
+    
+    if value_range < min_range:
+        return False
+
+    if all(v == smoothed_values[0] for v in smoothed_values):
+        return False
+
+    trend_types = []
+    
+    for i in range(1, len(smoothed_values)):
+        if smoothed_values[i] > smoothed_values[i - 1]:
+            trend_types.append(1)
+            
+        elif smoothed_values[i] < smoothed_values[i - 1]:
+            trend_types.append(-1)
+            
+        else:
+            trend_types.append(0)
+
+    trend_count = trend_types.count(1) + trend_types.count(-1)
+
+    proportion = trend_count / len(trend_types)
+
+    return proportion >= threshold
+
+###################################################################################
+
+def system_memory_utilization(return_dict=False):
+
+    if return_dict:
+        return dict(psutil.virtual_memory()._asdict())
+
+    else:
+        print('RAM memory % used:', psutil.virtual_memory()[2])
+        print('RAM Used (GB):', psutil.virtual_memory()[3]/(1024**3))
+
+###################################################################################
+
+def create_files_list(datasets_paths=['./'],
+                      files_exts=['.mid', '.midi', '.kar', '.MID', '.MIDI', '.KAR'],
+                      randomize_files_list=True,
+                      verbose=True
+                     ):
+    if verbose:
+        print('=' * 70)
+        print('Searching for files...')
+        print('This may take a while on a large dataset in particular...')
+        print('=' * 70)
+
+    filez_set = defaultdict(None)
+
+    files_exts = tuple(files_exts)
+    
+    for dataset_addr in tqdm.tqdm(datasets_paths):
+        for dirpath, dirnames, filenames in os.walk(dataset_addr):
+            for file in filenames:
+                if file not in filez_set and file.endswith(files_exts):
+                    filez_set[os.path.join(dirpath, file)] = None
+    
+    filez = list(filez_set.keys())
+
+    if verbose:
+        print('Done!')
+        print('=' * 70)
+    
+    if filez:
+        if randomize_files_list:
+            
+            if verbose:
+                print('Randomizing file list...')
+                
+            random.shuffle(filez)
+            
+            if verbose:
+                print('Done!')
+                print('=' * 70)
+                
+        if verbose:
+            print('Found', len(filez), 'files.')
+            print('=' * 70)
+ 
+    else:
+        if verbose:
+            print('Could not find any files...')
+            print('Please check dataset dirs and files extensions...')
+            print('=' * 70)
+        
+    return filez
+
+###################################################################################
+
+def has_consecutive_trend(nums, count):
+    
+    if len(nums) < count:
+        return False
+    
+    increasing_streak = 1
+    decreasing_streak = 1
+
+    for i in range(1, len(nums)):
+        if nums[i] > nums[i - 1]:
+            increasing_streak += 1
+            decreasing_streak = 1
+            
+        elif nums[i] < nums[i - 1]:
+            decreasing_streak += 1
+            increasing_streak = 1
+            
+        else:
+            increasing_streak = decreasing_streak = 1
+        
+        if increasing_streak == count or decreasing_streak == count:
+            return True
+    
+    return False
+
+###################################################################################
 # This is the end of the TMIDI X Python module
-#
 ###################################################################################
