@@ -1700,7 +1700,7 @@ def advanced_score_processor(raw_score,
 
 ###################################################################################
 
-def load_signatures(signatures_data, covert_counts_to_ratios=False, omit_drums=True):
+def load_signatures(signatures_data, covert_counts_to_ratios=True, omit_drums=True):
 
     sigs_dicts = []
     
@@ -1815,7 +1815,7 @@ def get_distances_np(trg_signature_dictionary,
 
 def get_MIDI_signature(path_to_MIDI_file,
                        transpose_factor=0,
-                       covert_counts_to_ratios=False,
+                       covert_counts_to_ratios=True,
                        omit_drums=True
                       ):
 
@@ -1940,7 +1940,8 @@ def search_and_filter(sigs_dicts,
                       master_dir = './Master-MIDI-Dataset/',
                       output_dir = './Output-MIDI-Dataset/',
                       number_of_top_matches_to_copy = 30,
-                      transpose_factor=6
+                      transpose_factor=6,
+                      covert_counts_to_ratios=True
                      ):
 
     transpose_factor = max(0, min(6, transpose_factor))
@@ -1967,7 +1968,10 @@ def search_and_filter(sigs_dicts,
         print('Processing MIDI file:', inp_fn)
         print('=' * 70)
     
-        trg_sigs = get_MIDI_signature(midi, transpose_factor=transpose_factor)
+        trg_sigs = get_MIDI_signature(midi,
+                                      transpose_factor=transpose_factor,
+                                      covert_counts_to_ratios=covert_counts_to_ratios
+                                      )
     
         tv = list(range(tsidx, teidx))
         
