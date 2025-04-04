@@ -1700,7 +1700,7 @@ def advanced_score_processor(raw_score,
 
 ###################################################################################
 
-def load_signatures(signatures_data, omit_drums=True):
+def load_signatures(signatures_data, covert_counts_to_ratios=True, omit_drums=True):
 
     sigs_dicts = []
     
@@ -1708,6 +1708,10 @@ def load_signatures(signatures_data, omit_drums=True):
 
         if omit_drums:
             sig = [sig[0], [s for s in sig[1] if s[0] < 449]]
+
+        if covert_counts_to_ratios:
+            tcount = sum([s[1] for s in sig[1]])
+            sig = [sig[0], [[s[0], s[1] / tcount] for s in sig[1]]]
     
         sigs_dicts.append([sig[0], dict(sig[1])])
 
@@ -1717,7 +1721,7 @@ def load_signatures(signatures_data, omit_drums=True):
 
 def get_distance(sig_dict1, 
                  sig_dict2,
-                 penalty=10,
+                 mismatch_penalty=10,
                  p=3
                 ):
 
@@ -1737,24 +1741,25 @@ def get_distance(sig_dict1,
                 total += diff ** p
 
         else:
-            diff = penalty
+            diff = mismatch_penalty
             total += diff ** p
             
     return total ** (1.0 / p)
 
 ###################################################################################
 
-def get_distance_np(sig_dict1, sig_dict2, penalty=10, p=3):
+def get_distance_np(sig_dict1, sig_dict2, mismatch_penalty=10, p=3):
 
     keys = np.array(list(set(sig_dict1.keys()) | set(sig_dict2.keys())))
-    # Build frequency arrays aligned just with these keys.
+
     freq1 = np.array([sig_dict1.get(k, 0) for k in keys], dtype=float)
     freq2 = np.array([sig_dict2.get(k, 0) for k in keys], dtype=float)
     
     mask = (freq1 > 0) & (freq2 > 0)
+    
     diff = np.where(mask,
                     (np.maximum(freq1, freq2) / np.minimum(freq1, freq2)) - 1.0,
-                    penalty)
+                    mismatch_penalty)
     
     sum_term = np.sum((diff ** p) * union_mask, axis=1)
     
@@ -1788,7 +1793,7 @@ def precompute_signatures(signatures_dictionaries):
 def get_distances_np(trg_signature_dictionary,
                     X,
                     global_union,
-                    penalty=10,
+                    mismatch_penalty=10,
                     p=3
                     ):
 
@@ -1798,7 +1803,7 @@ def get_distances_np(trg_signature_dictionary,
     
     diff = np.where(mask_both,
                     (np.maximum(X, target_vec) / np.minimum(X, target_vec)) - 1.0,
-                    penalty)
+                    mismatch_penalty)
     
     union_mask = (X > 0) | (target_vec > 0)
     
@@ -1810,6 +1815,7 @@ def get_distances_np(trg_signature_dictionary,
 
 def get_MIDI_signature(path_to_MIDI_file,
                        transpose_factor=0,
+                       covert_counts_to_ratios=True,
                        omit_drums=True
                       ):
 
@@ -1886,6 +1892,10 @@ def get_MIDI_signature(path_to_MIDI_file,
             
                 for item in sig+dsig:
                     sig_p[item] += 1
+
+            if covert_counts_to_ratios:
+                tcount = sum([s[1] for s in sig_p.items()])
+                sig_p = dict([[s[0], s[1] / tcount] for s in sig_p.items()])
             
             src_sigs.append(sig_p)
             
@@ -1945,7 +1955,8 @@ def search_and_filter(sigs_dicts,
         teidx = 1
 
     master_midis = create_files_list([master_dir])
-    
+
+    os.makedirs(master_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
     
     for midi in master_midis:
@@ -1961,6 +1972,7 @@ def search_and_filter(sigs_dicts,
         tv = list(range(tsidx, teidx))
         
         seen = []
+        rseen = []
     
         for i in tqdm.tqdm(range(len(trg_sigs))):
             
@@ -1979,13 +1991,14 @@ def search_and_filter(sigs_dicts,
         
                 new_fn = output_dir+out_dir+'/'+str(dist)+'_'+str(tv[i])+'_'+fn+'.mid'
         
-                if fn not in seen:
+                if fn not in seen and dist not in rseen:
                     
                     src_fn = monster_dir+fn[0]+'/'+fn+'.mid'
                     
                     if os.path.exists(src_fn):
                         shutil.copy2(src_fn, new_fn)
                         seen.append(fn)
+                        rseen.append(dist)
 
     print('=' * 70)
     print('Done!')
