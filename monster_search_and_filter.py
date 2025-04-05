@@ -1700,7 +1700,7 @@ def advanced_score_processor(raw_score,
 
 ###################################################################################
 
-def load_signatures(signatures_data, covert_counts_to_ratios=True, omit_drums=True):
+def load_signatures(signatures_data, convert_counts_to_ratios=True, omit_drums=True):
 
     sigs_dicts = []
     
@@ -1709,7 +1709,7 @@ def load_signatures(signatures_data, covert_counts_to_ratios=True, omit_drums=Tr
         if omit_drums:
             sig = [sig[0], [s for s in sig[1] if s[0] < 449]]
 
-        if covert_counts_to_ratios:
+        if convert_counts_to_ratios:
             tcount = sum([s[1] for s in sig[1]])
             sig = [sig[0], [[s[0], s[1] / tcount] for s in sig[1]]]
     
@@ -1815,7 +1815,7 @@ def get_distances_np(trg_signature_dictionary,
 
 def get_MIDI_signature(path_to_MIDI_file,
                        transpose_factor=0,
-                       covert_counts_to_ratios=True,
+                       convert_counts_to_ratios=True,
                        omit_drums=True
                       ):
 
@@ -1893,7 +1893,7 @@ def get_MIDI_signature(path_to_MIDI_file,
                 for item in sig+dsig:
                     sig_p[item] += 1
 
-            if covert_counts_to_ratios:
+            if convert_counts_to_ratios:
                 tcount = sum([s[1] for s in sig_p.items()])
                 sig_p = dict([[s[0], s[1] / tcount] for s in sig_p.items()])
             
@@ -1941,7 +1941,7 @@ def search_and_filter(sigs_dicts,
                       output_dir = './Output-MIDI-Dataset/',
                       number_of_top_matches_to_copy = 30,
                       transpose_factor=6,
-                      covert_counts_to_ratios=True,
+                      convert_counts_to_ratios=True,
                       omit_drums=True
                      ):
 
@@ -1971,8 +1971,10 @@ def search_and_filter(sigs_dicts,
     
         trg_sigs = get_MIDI_signature(midi,
                                       transpose_factor=transpose_factor,
-                                      covert_counts_to_ratios=covert_counts_to_ratios,
-                                      omit_drums=omit_drums
+                                      convert_counts_to_ratios=convert_counts_to_ratios,
+                                      omit_drums=omit_drums,
+                                      mismatch_penalty=10,
+                                      p=3
                                       )
     
         tv = list(range(tsidx, teidx))
@@ -1982,7 +1984,12 @@ def search_and_filter(sigs_dicts,
     
         for i in tqdm.tqdm(range(len(trg_sigs))):
             
-            dists = get_distances_np(trg_sigs[i], X, global_union)
+            dists = get_distances_np(trg_sigs[i],
+                                     X,
+                                     global_union,
+                                     mismatch_penalty=mismatch_penalty,
+                                     p=p
+                                     )
         
             sorted_indices = np.argsort(dists).tolist()
     
