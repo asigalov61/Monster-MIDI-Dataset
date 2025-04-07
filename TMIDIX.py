@@ -1,6 +1,5 @@
 #! /usr/bin/python3
 
-
 r'''###############################################################################
 ###################################################################################
 #
@@ -8,7 +7,7 @@ r'''############################################################################
 #	Tegridy MIDI X Module (TMIDI X / tee-midi eks)
 #	Version 1.0
 #
-#   NOTE: TMIDI X Module starts after the partial MIDI.py module @ line 1438
+#   NOTE: TMIDI X Module starts after the partial MIDI.py module @ line 1437
 #
 #	Based upon MIDI.py module v.6.7. by Peter Billam / pjb.com.au
 #
@@ -1458,8 +1457,6 @@ import os
 
 import datetime
 
-import copy
-
 from datetime import datetime
 
 import secrets
@@ -1476,11 +1473,11 @@ import multiprocessing
 
 from itertools import zip_longest
 from itertools import groupby
+
 from collections import Counter
+from collections import defaultdict
 
 from operator import itemgetter
-
-import sys
 
 from abc import ABC, abstractmethod
 
@@ -1493,7 +1490,7 @@ import matplotlib.pyplot as plt
 
 import psutil
 
-from collections import defaultdict
+import json
 
 ###################################################################################
 #
@@ -4184,6 +4181,17 @@ def advanced_score_processor(raw_score,
               basic_single_track_score.append(ev)
             num_tracks += 1
 
+      for e in basic_single_track_score:
+
+          if e[0] == 'note':
+              e[3] = e[3] % 16
+              e[4] = e[4] % 128
+              e[5] = e[5] % 128
+
+          if e[0] == 'patch_change':
+              e[2] = e[2] % 16
+              e[3] = e[3] % 128
+
       basic_single_track_score.sort(key=lambda x: x[4] if x[0] == 'note' else 128, reverse=True)
       basic_single_track_score.sort(key=lambda x: x[1])
 
@@ -4198,7 +4206,7 @@ def advanced_score_processor(raw_score,
               enhanced_single_track_score.append(event)
               num_patch_changes += 1
 
-        if event[0] == 'note':
+        if event[0] == 'note':            
             if event[3] != 9:
               event.extend([patches[event[3]]])
               all_score_patches.extend([patches[event[3]]])
@@ -11300,7 +11308,7 @@ def create_files_list(datasets_paths=['./'],
 
     files_exts = tuple(files_exts)
     
-    for dataset_addr in tqdm.tqdm(datasets_paths):
+    for dataset_addr in tqdm.tqdm(datasets_paths, disable=not verbose):
         for dirpath, dirnames, filenames in os.walk(dataset_addr):
             for file in filenames:
                 if file not in filez_set and file.endswith(files_exts):
@@ -11362,6 +11370,861 @@ def has_consecutive_trend(nums, count):
             return True
     
     return False
+
+###################################################################################
+
+def escore_notes_primary_features(escore_notes):
+
+    #=================================================================
+
+    def mean(values):
+        return sum(values) / len(values) if values else None
+
+    def std(values):
+        if not values:
+            return None
+        m = mean(values)
+        return math.sqrt(sum((x - m) ** 2 for x in values) / len(values)) if m is not None else None
+
+    def skew(values):
+        if not values:
+            return None
+        m = mean(values)
+        s = std(values)
+        if s is None or s == 0:
+            return None
+        return sum(((x - m) / s) ** 3 for x in values) / len(values)
+
+    def kurtosis(values):
+        if not values:
+            return None
+        m = mean(values)
+        s = std(values)
+        if s is None or s == 0:
+            return None
+        return sum(((x - m) / s) ** 4 for x in values) / len(values) - 3
+
+    def median(values):
+        if not values:
+            return None
+        srt = sorted(values)
+        n = len(srt)
+        mid = n // 2
+        if n % 2 == 0:
+            return (srt[mid - 1] + srt[mid]) / 2.0
+        return srt[mid]
+
+    def percentile(values, p):
+        if not values:
+            return None
+        srt = sorted(values)
+        n = len(srt)
+        k = (n - 1) * p / 100.0
+        f = int(k)
+        c = k - f
+        if f + 1 < n:
+            return srt[f] * (1 - c) + srt[f + 1] * c
+        return srt[f]
+
+    def diff(values):
+        if not values or len(values) < 2:
+            return []
+        return [values[i + 1] - values[i] for i in range(len(values) - 1)]
+
+    def mad(values):
+        if not values:
+            return None
+        m = median(values)
+        return median([abs(x - m) for x in values])
+
+    def entropy(values):
+        if not values:
+            return None
+        freq = {}
+        for v in values:
+            freq[v] = freq.get(v, 0) + 1
+        total = len(values)
+        ent = 0.0
+        for count in freq.values():
+            p_val = count / total
+            ent -= p_val * math.log2(p_val)
+        return ent
+
+    def mode(values):
+        if not values:
+            return None
+        freq = {}
+        for v in values:
+            freq[v] = freq.get(v, 0) + 1
+        max_count = max(freq.values())
+        modes = [k for k, count in freq.items() if count == max_count]
+        return min(modes)
+
+
+    #=================================================================
+    
+    sp_score = solo_piano_escore_notes(escore_notes)
+
+    dscore = delta_score_notes(sp_score)
+    
+    seq = []
+    
+    for d in dscore:
+        seq.extend([d[1], d[2], d[4]])
+
+    #=================================================================
+
+    n = len(seq)
+    if n % 3 != 0:
+        seq = seq[: n - (n % 3)]
+    arr = [seq[i:i + 3] for i in range(0, len(seq), 3)]
+
+    #=================================================================
+    
+    features = {}
+
+    delta_times = [row[0] for row in arr]
+    if delta_times:
+        features['delta_times_mean'] = mean(delta_times)
+        features['delta_times_std'] = std(delta_times)
+        features['delta_times_min'] = min(delta_times)
+        features['delta_times_max'] = max(delta_times)
+        features['delta_times_skew'] = skew(delta_times)
+        features['delta_times_kurtosis'] = kurtosis(delta_times)
+        delta_zero_count = sum(1 for x in delta_times if x == 0)
+        features['delta_times_zero_ratio'] = delta_zero_count / len(delta_times)
+        nonzero_dt = [x for x in delta_times if x != 0]
+        if nonzero_dt:
+            features['delta_times_nonzero_mean'] = mean(nonzero_dt)
+            features['delta_times_nonzero_std'] = std(nonzero_dt)
+        else:
+            features['delta_times_nonzero_mean'] = None
+            features['delta_times_nonzero_std'] = None
+        features['delta_times_mad'] = mad(delta_times)
+        features['delta_times_cv'] = (features['delta_times_std'] / features['delta_times_mean']
+                                      if features['delta_times_mean'] and features['delta_times_mean'] != 0 else None)
+        features['delta_times_entropy'] = entropy(delta_times)
+        features['delta_times_range'] = max(delta_times) - min(delta_times)
+        features['delta_times_median'] = median(delta_times)
+        features['delta_times_quantile_25'] = percentile(delta_times, 25)
+        features['delta_times_quantile_75'] = percentile(delta_times, 75)
+        if (features['delta_times_quantile_25'] is not None and features['delta_times_quantile_75'] is not None):
+            features['delta_times_iqr'] = features['delta_times_quantile_75'] - features['delta_times_quantile_25']
+        else:
+            features['delta_times_iqr'] = None
+    else:
+        for key in ['delta_times_mean', 'delta_times_std', 'delta_times_min', 'delta_times_max',
+                    'delta_times_skew', 'delta_times_kurtosis', 'delta_times_zero_ratio',
+                    'delta_times_nonzero_mean', 'delta_times_nonzero_std', 'delta_times_mad',
+                    'delta_times_cv', 'delta_times_entropy', 'delta_times_range', 'delta_times_median',
+                    'delta_times_quantile_25', 'delta_times_quantile_75', 'delta_times_iqr']:
+            features[key] = None
+
+    #=================================================================
+
+    durations = [row[1] for row in arr]
+    if durations:
+        features['durations_mean'] = mean(durations)
+        features['durations_std'] = std(durations)
+        features['durations_min'] = min(durations)
+        features['durations_max'] = max(durations)
+        features['durations_skew'] = skew(durations)
+        features['durations_kurtosis'] = kurtosis(durations)
+        features['durations_mad'] = mad(durations)
+        features['durations_cv'] = (features['durations_std'] / features['durations_mean']
+                                    if features['durations_mean'] and features['durations_mean'] != 0 else None)
+        features['durations_entropy'] = entropy(durations)
+        features['durations_range'] = max(durations) - min(durations)
+        features['durations_median'] = median(durations)
+        features['durations_quantile_25'] = percentile(durations, 25)
+        features['durations_quantile_75'] = percentile(durations, 75)
+        if features['durations_quantile_25'] is not None and features['durations_quantile_75'] is not None:
+            features['durations_iqr'] = features['durations_quantile_75'] - features['durations_quantile_25']
+        else:
+            features['durations_iqr'] = None
+    else:
+        for key in ['durations_mean', 'durations_std', 'durations_min', 'durations_max',
+                    'durations_skew', 'durations_kurtosis', 'durations_mad', 'durations_cv',
+                    'durations_entropy', 'durations_range', 'durations_median', 'durations_quantile_25',
+                    'durations_quantile_75', 'durations_iqr']:
+            features[key] = None
+
+    #=================================================================
+
+    pitches = [row[2] for row in arr]
+    if pitches:
+        features['pitches_mean'] = mean(pitches)
+        features['pitches_std'] = std(pitches)
+        features['pitches_min'] = min(pitches)
+        features['pitches_max'] = max(pitches)
+        features['pitches_skew'] = skew(pitches)
+        features['pitches_kurtosis'] = kurtosis(pitches)
+        features['pitches_range'] = max(pitches) - min(pitches)
+        features['pitches_median'] = median(pitches)
+        features['pitches_quantile_25'] = percentile(pitches, 25)
+        features['pitches_quantile_75'] = percentile(pitches, 75)
+        if len(pitches) > 1:
+            dps = diff(pitches)
+            features['pitches_diff_mean'] = mean(dps)
+            features['pitches_diff_std'] = std(dps)
+        else:
+            features['pitches_diff_mean'] = None
+            features['pitches_diff_std'] = None
+        features['pitches_mad'] = mad(pitches)
+        if len(pitches) > 2:
+            peaks = sum(1 for i in range(1, len(pitches)-1)
+                        if pitches[i] > pitches[i-1] and pitches[i] > pitches[i+1])
+            valleys = sum(1 for i in range(1, len(pitches)-1)
+                          if pitches[i] < pitches[i-1] and pitches[i] < pitches[i+1])
+        else:
+            peaks, valleys = None, None
+        features['pitches_peak_count'] = peaks
+        features['pitches_valley_count'] = valleys
+        if len(pitches) > 1:
+            x = list(range(len(pitches)))
+            denominator = (len(x) * sum(xi ** 2 for xi in x) - sum(x) ** 2)
+            if denominator != 0:
+                slope = (len(x) * sum(x[i] * pitches[i] for i in range(len(x))) -
+                         sum(x) * sum(pitches)) / denominator
+            else:
+                slope = None
+            features['pitches_trend_slope'] = slope
+        else:
+            features['pitches_trend_slope'] = None
+
+        features['pitches_unique_count'] = len(set(pitches))
+        pitch_class_hist = {i: 0 for i in range(12)}
+        for p in pitches:
+            pitch_class_hist[p % 12] += 1
+        total_pitch = len(pitches)
+        for i in range(12):
+            features[f'pitches_pc_{i}'] = (pitch_class_hist[i] / total_pitch) if total_pitch > 0 else None
+
+        max_asc = 0
+        cur_asc = 0
+        max_desc = 0
+        cur_desc = 0
+        for i in range(1, len(pitches)):
+            if pitches[i] > pitches[i-1]:
+                cur_asc += 1
+                max_asc = max(max_asc, cur_asc)
+                cur_desc = 0
+            elif pitches[i] < pitches[i-1]:
+                cur_desc += 1
+                max_desc = max(max_desc, cur_desc)
+                cur_asc = 0
+            else:
+                cur_asc = 0
+                cur_desc = 0
+        features['pitches_max_consecutive_ascending'] = max_asc if pitches else None
+        features['pitches_max_consecutive_descending'] = max_desc if pitches else None
+        p_intervals = diff(pitches)
+        features['pitches_median_diff'] = median(p_intervals) if p_intervals else None
+        if p_intervals:
+            dc = sum(1 for i in range(1, len(p_intervals))
+                     if (p_intervals[i] > 0 and p_intervals[i-1] < 0) or (p_intervals[i] < 0 and p_intervals[i-1] > 0))
+            features['pitches_direction_changes'] = dc
+        else:
+            features['pitches_direction_changes'] = None
+    else:
+        for key in (['pitches_mean', 'pitches_std', 'pitches_min', 'pitches_max', 'pitches_skew',
+                     'pitches_kurtosis', 'pitches_range', 'pitches_median', 'pitches_quantile_25',
+                     'pitches_quantile_75', 'pitches_diff_mean', 'pitches_diff_std', 'pitches_mad',
+                     'pitches_peak_count', 'pitches_valley_count', 'pitches_trend_slope',
+                     'pitches_unique_count', 'pitches_max_consecutive_ascending', 'pitches_max_consecutive_descending',
+                     'pitches_median_diff', 'pitches_direction_changes'] +
+                    [f'pitches_pc_{i}' for i in range(12)]):
+            features[key] = None
+
+    #=================================================================
+
+    overall = [x for row in arr for x in row]
+    if overall:
+        features['overall_mean'] = mean(overall)
+        features['overall_std'] = std(overall)
+        features['overall_min'] = min(overall)
+        features['overall_max'] = max(overall)
+        features['overall_cv'] = (features['overall_std'] / features['overall_mean']
+                                  if features['overall_mean'] and features['overall_mean'] != 0 else None)
+    else:
+        for key in ['overall_mean', 'overall_std', 'overall_min', 'overall_max', 'overall_cv']:
+            features[key] = None
+
+    #=================================================================
+
+    onsets = []
+    cumulative = 0
+    for dt in delta_times:
+        onsets.append(cumulative)
+        cumulative += dt
+    if onsets and durations:
+        overall_piece_duration = onsets[-1] + durations[-1]
+    else:
+        overall_piece_duration = None
+    features['overall_piece_duration'] = overall_piece_duration
+    features['overall_notes_density'] = (len(arr) / overall_piece_duration
+                                         if overall_piece_duration and overall_piece_duration > 0 else None)
+    features['rhythm_ratio'] = (features['durations_mean'] / features['delta_times_mean']
+                                if features['delta_times_mean'] and features['delta_times_mean'] != 0 else None)
+    features['overall_sum_delta_times'] = (sum(delta_times) if delta_times else None)
+    features['overall_sum_durations'] = (sum(durations) if durations else None)
+    features['overall_voicing_ratio'] = (sum(durations) / overall_piece_duration
+                                         if overall_piece_duration and durations else None)
+    features['overall_onset_std'] = std(onsets) if onsets else None
+
+    #=================================================================
+
+    chords_raw = []
+    chords_pc = []
+    current_group = []
+    for i, note in enumerate(arr):
+        dt = note[0]
+        if i == 0:
+            current_group = [i]
+        else:
+            if dt == 0:
+                current_group.append(i)
+            else:
+                if len(current_group) >= 2:
+                    chord_notes = [arr[j][2] for j in current_group]
+                    chords_raw.append(tuple(sorted(chord_notes)))
+                    chords_pc.append(tuple(sorted(set(p % 12 for p in chord_notes))))
+
+                current_group = [i]
+
+    if current_group and len(current_group) >= 2:
+        chord_notes = [arr[j][2] for j in current_group]
+        chords_raw.append(tuple(sorted(chord_notes)))
+        chords_pc.append(tuple(sorted(set(p % 12 for p in chord_notes))))
+    
+    if chords_raw:
+        chord_count = len(chords_raw)
+        features['chords_count'] = chord_count
+        features['chords_density'] = (chord_count / overall_piece_duration
+                                      if overall_piece_duration and chord_count is not None else None)
+        chord_sizes = [len(ch) for ch in chords_raw]
+        features['chords_size_mean'] = mean(chord_sizes)
+        features['chords_size_std'] = std(chord_sizes)
+        features['chords_size_min'] = min(chord_sizes) if chord_sizes else None
+        features['chords_size_max'] = max(chord_sizes) if chord_sizes else None
+        features['chords_unique_raw_count'] = len(set(chords_raw))
+        features['chords_unique_pc_count'] = len(set(chords_pc))
+        features['chords_entropy_raw'] = entropy(chords_raw)
+        features['chords_entropy_pc'] = entropy(chords_pc)
+        if len(chords_raw) > 1:
+            rep_raw = sum(1 for i in range(1, len(chords_raw)) if chords_raw[i] == chords_raw[i - 1])
+            features['chords_repeat_ratio_raw'] = rep_raw / (len(chords_raw) - 1)
+        else:
+            features['chords_repeat_ratio_raw'] = None
+        if len(chords_pc) > 1:
+            rep_pc = sum(1 for i in range(1, len(chords_pc)) if chords_pc[i] == chords_pc[i - 1])
+            features['chords_repeat_ratio_pc'] = rep_pc / (len(chords_pc) - 1)
+        else:
+            features['chords_repeat_ratio_pc'] = None
+        if len(chords_raw) > 1:
+            bigrams_raw = [(chords_raw[i], chords_raw[i + 1]) for i in range(len(chords_raw) - 1)]
+            features['chords_bigram_entropy_raw'] = entropy(bigrams_raw)
+        else:
+            features['chords_bigram_entropy_raw'] = None
+        if len(chords_pc) > 1:
+            bigrams_pc = [(chords_pc[i], chords_pc[i + 1]) for i in range(len(chords_pc) - 1)]
+            features['chords_bigram_entropy_pc'] = entropy(bigrams_pc)
+        else:
+            features['chords_bigram_entropy_pc'] = None
+        features['chords_mode_raw'] = mode(chords_raw)
+        features['chords_mode_pc'] = mode(chords_pc)
+        if chords_pc:
+            pc_sizes = [len(ch) for ch in chords_pc]
+            features['chords_pc_size_mean'] = mean(pc_sizes)
+        else:
+            features['chords_pc_size_mean'] = None
+    else:
+        for key in ['chords_count', 'chords_density', 'chords_size_mean', 'chords_size_std',
+                    'chords_size_min', 'chords_size_max', 'chords_unique_raw_count', 'chords_unique_pc_count',
+                    'chords_entropy_raw', 'chords_entropy_pc', 'chords_repeat_ratio_raw', 'chords_repeat_ratio_pc',
+                    'chords_bigram_entropy_raw', 'chords_bigram_entropy_pc', 'chords_mode_raw', 'chords_mode_pc',
+                    'chords_pc_size_mean']:
+            features[key] = None
+
+    #=================================================================
+
+    if delta_times:
+        med_dt = features['delta_times_median']
+        iqr_dt = features['delta_times_iqr']
+        threshold_a = med_dt + 1.5 * iqr_dt if med_dt is not None and iqr_dt is not None else None
+        threshold_b = percentile(delta_times, 90)
+        if threshold_a is not None and threshold_b is not None:
+            phrase_threshold = max(threshold_a, threshold_b)
+        elif threshold_a is not None:
+            phrase_threshold = threshold_a
+        elif threshold_b is not None:
+            phrase_threshold = threshold_b
+        else:
+            phrase_threshold = None
+    else:
+        phrase_threshold = None
+
+    phrases = []
+    current_phrase = []
+    if onsets:
+        current_phrase.append(0)
+        for i in range(len(onsets) - 1):
+            gap = onsets[i + 1] - onsets[i]
+            if phrase_threshold is not None and gap > phrase_threshold:
+                phrases.append(current_phrase)
+                current_phrase = []
+            current_phrase.append(i + 1)
+        if current_phrase:
+            phrases.append(current_phrase)
+    if phrases:
+        phrase_note_counts = []
+        phrase_durations = []
+        phrase_densities = []
+        phrase_mean_pitches = []
+        phrase_pitch_ranges = []
+        phrase_start_times = []
+        phrase_end_times = []
+        for phrase in phrases:
+            note_count = len(phrase)
+            phrase_note_counts.append(note_count)
+            ph_start = onsets[phrase[0]]
+            ph_end = onsets[phrase[-1]] + durations[phrase[-1]]
+            phrase_start_times.append(ph_start)
+            phrase_end_times.append(ph_end)
+            ph_duration = ph_end - ph_start
+            phrase_durations.append(ph_duration)
+            density = note_count / ph_duration if ph_duration > 0 else None
+            phrase_densities.append(density)
+            ph_pitches = [pitches[i] for i in phrase if i < len(pitches)]
+            phrase_mean_pitches.append(mean(ph_pitches) if ph_pitches else None)
+            phrase_pitch_ranges.append((max(ph_pitches) - min(ph_pitches)) if ph_pitches else None)
+        if len(phrases) > 1:
+            phrase_gaps = []
+            for i in range(len(phrases) - 1):
+                gap = phrase_start_times[i + 1] - phrase_end_times[i]
+                phrase_gaps.append(gap if gap > 0 else 0)
+        else:
+            phrase_gaps = []
+        features['phrases_count'] = len(phrases)
+        features['phrases_avg_note_count'] = mean(phrase_note_counts) if phrase_note_counts else None
+        features['phrases_std_note_count'] = std(phrase_note_counts) if phrase_note_counts else None
+        features['phrases_min_note_count'] = min(phrase_note_counts) if phrase_note_counts else None
+        features['phrases_max_note_count'] = max(phrase_note_counts) if phrase_note_counts else None
+        features['phrases_avg_duration'] = mean(phrase_durations) if phrase_durations else None
+        features['phrases_std_duration'] = std(phrase_durations) if phrase_durations else None
+        features['phrases_min_duration'] = min(phrase_durations) if phrase_durations else None
+        features['phrases_max_duration'] = max(phrase_durations) if phrase_durations else None
+        features['phrases_avg_density'] = mean(phrase_densities) if phrase_densities else None
+        features['phrases_std_density'] = std(phrase_densities) if phrase_densities else None
+        features['phrases_avg_mean_pitch'] = mean(phrase_mean_pitches) if phrase_mean_pitches else None
+        features['phrases_avg_pitch_range'] = mean(phrase_pitch_ranges) if phrase_pitch_ranges else None
+        if phrase_gaps:
+            features['phrases_avg_gap'] = mean(phrase_gaps)
+            features['phrases_std_gap'] = std(phrase_gaps)
+            features['phrases_min_gap'] = min(phrase_gaps)
+            features['phrases_max_gap'] = max(phrase_gaps)
+        else:
+            features['phrases_avg_gap'] = None
+            features['phrases_std_gap'] = None
+            features['phrases_min_gap'] = None
+            features['phrases_max_gap'] = None
+        features['phrases_threshold'] = phrase_threshold
+    else:
+        for key in ['phrases_count', 'phrases_avg_note_count', 'phrases_std_note_count',
+                    'phrases_min_note_count', 'phrases_max_note_count', 'phrases_avg_duration',
+                    'phrases_std_duration', 'phrases_min_duration', 'phrases_max_duration',
+                    'phrases_avg_density', 'phrases_std_density', 'phrases_avg_mean_pitch',
+                    'phrases_avg_pitch_range', 'phrases_avg_gap', 'phrases_std_gap',
+                    'phrases_min_gap', 'phrases_max_gap', 'phrases_threshold']:
+            features[key] = None
+
+    #=================================================================
+
+    return features
+
+###################################################################################
+
+def winsorized_normalize(data, new_range=(0, 255), clip=1.5):
+
+    #=================================================================
+
+    new_min, new_max = new_range
+
+    #=================================================================
+
+    def percentile(values, p):
+        
+        srt = sorted(values)
+        n = len(srt)
+        if n == 1:
+            return srt[0]
+        k = (n - 1) * p / 100.0
+        f = int(k)
+        c = k - f
+        if f + 1 < n:
+            return srt[f] * (1 - c) + srt[f + 1] * c
+            
+        return srt[f]
+
+    #=================================================================
+
+    q1 = percentile(data, 25)
+    q3 = percentile(data, 75)
+    iqr = q3 - q1
+
+    lower_bound_w = q1 - clip * iqr
+    upper_bound_w = q3 + clip * iqr
+
+    data_min = min(data)
+    data_max = max(data)
+    effective_low = max(lower_bound_w, data_min)
+    effective_high = min(upper_bound_w, data_max)
+
+    #=================================================================
+
+    if effective_high == effective_low:
+        
+        if data_max == data_min:
+            return [int(new_min)] * len(data)
+            
+        normalized = [(x - data_min) / (data_max - data_min) for x in data]
+        
+        return [int(round(new_min + norm * (new_max - new_min))) for norm in normalized]
+
+    #=================================================================
+
+    clipped = [x if x >= effective_low else effective_low for x in data]
+    clipped = [x if x <= effective_high else effective_high for x in clipped]
+
+    normalized = [(x - effective_low) / (effective_high - effective_low) for x in clipped]
+
+    #=================================================================
+    
+    return [int(round(new_min + norm * (new_max - new_min))) for norm in normalized]
+
+###################################################################################
+
+def tokenize_features_to_ints_winsorized(features, new_range=(0, 255), clip=1.5, none_token=-1):
+
+    values = []    
+    tokens = []
+
+    #=================================================================
+
+    def process_value(val):
+        
+        if isinstance(val, (int, float)):
+            return int(round(abs(val)))
+            
+        elif isinstance(val, (list, tuple)):
+            return int(round(abs(sum(val) / len(val))))
+            
+        else:
+            return int(abs(hash(val)) % (10 ** 8))
+
+    #=================================================================
+
+    for key in sorted(features.keys()):
+        
+        value = features[key]
+        
+        if value is None:
+            tokens.append(none_token)
+            values.append(none_token)
+            
+        else:
+            tokens.append(process_value(value))
+            
+            if isinstance(value, (list, tuple)):
+                values.append(sum(value) / len(value))
+                
+            else:
+                values.append(value)
+
+    #=================================================================
+    
+    norm_tokens = winsorized_normalize(tokens, new_range, clip)
+
+    #=================================================================
+
+    return values, tokens, norm_tokens
+
+###################################################################################
+
+def write_jsonl(records_dicts_list, 
+                file_name='data', 
+                file_ext='.jsonl', 
+                file_mode='w', 
+                line_sep='\n', 
+                verbose=True
+               ):
+
+    if verbose:
+        print('=' * 70)
+        print('Writing', len(records_dicts_list), 'records to jsonl file...')
+        print('=' * 70)
+
+    if not os.path.splitext(file_name)[1]:
+        file_name += file_ext
+
+    l_count = 0
+
+    with open(file_name, mode=file_mode) as f:
+        for record in tqdm.tqdm(records_dicts_list, disable=not verbose):
+            f.write(json.dumps(record) + line_sep)
+            l_count += 1
+
+    f.close()
+
+    if verbose:
+        print('=' * 70)
+        print('Written total of', l_count, 'jsonl records.')
+        print('=' * 70)
+        print('Done!')
+        print('=' * 70)
+
+###################################################################################
+        
+def read_jsonl(file_name='data', 
+               file_ext='.jsonl', 
+               verbose=True
+              ):
+
+    if verbose:
+        print('=' * 70)
+        print('Reading jsonl file...')
+        print('=' * 70)
+
+    if not os.path.splitext(file_name)[1]:
+        file_name += file_ext
+
+    with open(file_name, 'r') as f:
+
+        records = []
+        gl_count = 0
+        
+        for i, line in tqdm.tqdm(enumerate(f), disable=not verbose):
+            
+            try:
+                record = json.loads(line)
+                records.append(record)
+                gl_count += 1
+
+            except KeyboardInterrupt:
+                if verbose:
+                    print('=' * 70)
+                    print('Stoping...')
+                    print('=' * 70)
+                    
+                f.close()
+    
+                return records
+               
+            except json.JSONDecodeError:
+                if verbose:
+                    print('=' * 70)
+                    print('[ERROR] Line', i, 'is corrupted! Skipping it...')
+                    print('=' * 70)
+                    
+                continue
+                
+    f.close()
+    
+    if verbose:
+        print('=' * 70)
+        print('Loaded total of', gl_count, 'jsonl records.')
+        print('=' * 70)
+        print('Done!')
+        print('=' * 70)
+
+    return records
+
+###################################################################################
+
+def read_jsonl_lines(lines_indexes_list, 
+                     file_name='data', 
+                     file_ext='.jsonl', 
+                     verbose=True
+                    ):
+
+    if verbose:
+        print('=' * 70)
+        print('Reading jsonl file...')
+        print('=' * 70)
+
+    if not os.path.splitext(file_name)[1]:
+        file_name += file_ext
+
+    records = []
+    l_count = 0
+
+    lines_indexes_list.sort(reverse=True)
+
+    with open(file_name, 'r') as f:
+        for current_line_number, line in tqdm.tqdm(enumerate(f)):
+
+            try:
+                if current_line_number in lines_indexes_list:
+                    record = json.loads(line)
+                    records.append(record)
+                    lines_indexes_list = lines_indexes_list[:-1]
+                    l_count += 1
+
+                if not lines_indexes_list:
+                    break
+
+            except KeyboardInterrupt:
+                if verbose:
+                    print('=' * 70)
+                    print('Stoping...')
+                    print('=' * 70)
+                    
+                f.close()
+    
+                return records
+               
+            except json.JSONDecodeError:
+                if verbose:
+                    print('=' * 70)
+                    print('[ERROR] Line', current_line_number, 'is corrupted! Skipping it...')
+                    print('=' * 70)
+                    
+                continue
+
+    f.close()
+    
+    if verbose:
+        print('=' * 70)
+        print('Loaded total of', l_count, 'jsonl records.')
+        print('=' * 70)
+        print('Done!')
+        print('=' * 70)
+
+    return records
+
+###################################################################################
+
+def compute_base(x: int, n: int) -> int:
+
+    if x < 0:
+        raise ValueError("x must be non-negative.")
+    if x == 0:
+        return 2 
+        
+    b = max(2, int(x ** (1 / n)))
+    
+    if b ** n <= x:
+        b += 1
+        
+    return b
+
+###################################################################################
+
+def encode_int_auto(x: int, n: int) -> tuple[int, list[int]]:
+   
+    base = compute_base(x, n)
+    digits = [0] * n
+    
+    for i in range(n - 1, -1, -1):
+        digits[i] = x % base
+        x //= base
+        
+    return base, digits
+
+###################################################################################
+
+def decode_int_auto(base: int, digits: list[int]) -> int:
+   
+    x = 0
+    for digit in digits:
+        if digit < 0 or digit >= base:
+            raise ValueError(f"Each digit must be in the range 0 to {base - 1}. Invalid digit: {digit}")
+            
+        x = x * base + digit
+        
+    return x
+
+###################################################################################
+
+def encode_int_manual(x, base, n):
+
+    digits = [0] * n
+    
+    for i in range(n - 1, -1, -1):
+        digits[i] = x % base
+        x //= base
+
+    return digits
+
+###################################################################################
+
+def escore_notes_pitches_chords_signature(escore_notes, 
+                                          max_patch=128, 
+                                          sort_by_counts=False, 
+                                          use_full_chords=False
+                                         ):
+
+    escore_notes = [e for e in escore_notes if e[6] <= max_patch % 129]
+
+    if escore_notes:
+
+        cscore = chordify_score([1000, escore_notes])
+        
+        sig = []
+        dsig = []
+        
+        drums_offset = 321 + 128
+        
+        bad_chords_counter = 0
+        
+        for c in cscore:
+            
+            all_pitches = [e[4] if e[3] != 9 else e[4]+128 for e in c]
+            chord = sorted(set(all_pitches))
+        
+            pitches = sorted([p for p in chord if p < 128], reverse=True)
+            drums = [(d+drums_offset)-128 for d in chord if d > 127]
+        
+            if pitches:
+              if len(pitches) > 1:
+                tones_chord = sorted(set([p % 12 for p in pitches]))
+                     
+                try:
+                    sig_token = ALL_CHORDS_SORTED.index(tones_chord) + 128
+                except:
+                    checked_tones_chord = check_and_fix_tones_chord(tones_chord, use_full_chords=use_full_chords)
+                    sig_token = ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
+                    bad_chords_counter += 1
+                    
+              elif len(pitches) == 1:
+                sig_token = pitches[0]
+        
+              sig.append(sig_token)
+        
+            if drums:
+              dsig.extend(drums)
+        
+        sig_p = {}
+        
+        for item in sig+dsig:
+            
+            if item in sig_p:
+                sig_p[item] += 1
+        
+            else:
+                sig_p[item] = 1
+        
+        sig_p[-1] = bad_chords_counter
+        
+        fsig = [list(v) for v in sig_p.items()]
+    
+        if sort_by_counts:
+            fsig.sort(key=lambda x: x[1], reverse=True)
+    
+        return fsig
+
+    else:
+        return []
 
 ###################################################################################
 # This is the end of the TMIDI X Python module
