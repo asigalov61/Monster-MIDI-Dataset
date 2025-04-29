@@ -5,9 +5,8 @@ r'''############################################################################
 #
 #
 #	Tegridy MIDI X Module (TMIDI X / tee-midi eks)
-#	Version 1.0
 #
-#   NOTE: TMIDI X Module starts after the partial MIDI.py module @ line 1437
+#   NOTE: TMIDI X Module starts after the partial MIDI.py module @ line 1450
 #
 #	Based upon MIDI.py module v.6.7. by Peter Billam / pjb.com.au
 #
@@ -26,7 +25,7 @@ r'''############################################################################
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
 #
-#       http://www.apache.org/licenses/LICENSE-2.0
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
 #   Unless required by applicable law or agreed to in writing, software
 #   distributed under the License is distributed on an "AS IS" BASIS,
@@ -47,9 +46,23 @@ r'''############################################################################
 #	Copyright 2020 Peter Billam
 #
 ###################################################################################
-###################################################################################'''
+###################################################################################
+'''
+
+###################################################################################
+
+__version__ = "25.4.28"
+
+print('=' * 70)
+print('TMIDIX Python module')
+print('Version:', __version__)
+print('=' * 70)
+print('Loading module...')
+
+###################################################################################
 
 import sys, struct, copy
+
 Version = '6.7'
 VersionDate = '20201120'
 
@@ -1439,7 +1452,6 @@ def _encode(events_lol, unknown_callback=None, never_add_eot=False,
 ###################################################################################
 #
 #	Tegridy MIDI X Module (TMIDI X / tee-midi eks)
-#	Version 1.0
 #
 #	Based upon and includes the amazing MIDI.py module v.6.7. by Peter Billam
 #	pjb.com.au
@@ -1491,6 +1503,12 @@ import matplotlib.pyplot as plt
 import psutil
 
 import json
+
+from pathlib import Path
+
+import shutil
+
+import hashlib
 
 ###################################################################################
 #
@@ -3856,7 +3874,7 @@ def fix_monophonic_score_durations(monophonic_score):
         nmt = monophonic_score[i+1][1]
 
         if note[1]+note[2] >= nmt:
-          note_dur = nmt-note[1]-1
+          note_dur = max(1, nmt-note[1]-1)
         else:
           note_dur = note[2]
 
@@ -3874,7 +3892,7 @@ def fix_monophonic_score_durations(monophonic_score):
         nmt = monophonic_score[i+1][0]
 
         if note[0]+note[1] >= nmt:
-          note_dur = nmt-note[0]-1
+          note_dur = max(1, nmt-note[0]-1)
         else:
           note_dur = note[1]
 
@@ -4144,15 +4162,16 @@ def tones_chord_to_pitches(tones_chord, base_pitch=60):
 ###################################################################################
 
 def advanced_score_processor(raw_score, 
-                              patches_to_analyze=list(range(129)), 
-                              return_score_analysis=False,
-                              return_enhanced_score=False,
-                              return_enhanced_score_notes=False,
-                              return_enhanced_monophonic_melody=False,
-                              return_chordified_enhanced_score=False,
-                              return_chordified_enhanced_score_with_lyrics=False,
-                              return_score_tones_chords=False,
-                              return_text_and_lyric_events=False
+                             patches_to_analyze=list(range(129)), 
+                             return_score_analysis=False,
+                             return_enhanced_score=False,
+                             return_enhanced_score_notes=False,
+                             return_enhanced_monophonic_melody=False,
+                             return_chordified_enhanced_score=False,
+                             return_chordified_enhanced_score_with_lyrics=False,
+                             return_score_tones_chords=False,
+                             return_text_and_lyric_events=False,
+                             apply_sustain=False  
                             ):
 
   '''TMIDIX Advanced Score Processor'''
@@ -4192,6 +4211,9 @@ def advanced_score_processor(raw_score,
               e[2] = e[2] % 16
               e[3] = e[3] % 128
 
+      if apply_sustain:
+          apply_sustain_to_ms_score([1000, basic_single_track_score])
+          
       basic_single_track_score.sort(key=lambda x: x[4] if x[0] == 'note' else 128, reverse=True)
       basic_single_track_score.sort(key=lambda x: x[1])
 
@@ -4706,7 +4728,8 @@ def augment_enhanced_score_notes(enhanced_score_notes,
                                   ceil_timings=False,
                                   round_timings=False,
                                   legacy_timings=True,
-                                  sort_drums_last=False
+                                  sort_drums_last=False,
+                                  even_timings=False
                                 ):
 
     esn = copy.deepcopy(enhanced_score_notes)
@@ -4749,6 +4772,16 @@ def augment_enhanced_score_notes(enhanced_score_notes,
       e[4] = max(1, min(127, e[4] + pitch_shift))
 
       pe = enhanced_score_notes[i]
+      
+      
+    if even_timings:
+        
+      for e in esn:
+          if e[1] % 2 != 0:
+              e[1] += 1
+          
+          if e[2] % 2 != 0:
+              e[2] += 1
 
     if full_sorting:
 
@@ -6689,12 +6722,23 @@ def find_next_bar(escore_notes, bar_time, start_note_idx, cur_bar):
 def align_escore_notes_to_bars(escore_notes,
                                bar_time=4000,
                                trim_durations=False,
-                               split_durations=False
+                               split_durations=False,
+                               even_timings=False
                                ):
 
   #=============================================================================
+    
+  escore = copy.deepcopy(escore_notes)
+  
+  if even_timings:
+      for e in escore:
+          if e[1] % 2 != 0:
+              e[1] += 1
+          
+          if e[2] % 2 != 0:
+              e[2] += 1
 
-  aligned_escore_notes = copy.deepcopy(escore_notes)
+  aligned_escore_notes = copy.deepcopy(escore)
 
   abs_time = 0
   nidx = 0
@@ -6706,13 +6750,13 @@ def align_escore_notes_to_bars(escore_notes,
 
   while next_bar:
 
-    next_bar = find_next_bar(escore_notes, bar_time, nidx, bcount)
+    next_bar = find_next_bar(escore, bar_time, nidx, bcount)
 
     if next_bar:
-
-      gescore_notes = escore_notes[nidx:next_bar[1]]
+      gescore_notes = escore[nidx:next_bar[1]]
+    
     else:
-      gescore_notes = escore_notes[nidx:]
+      gescore_notes = escore[nidx:]
 
     original_timings = [delta] + [(b[1]-a[1]) for a, b in zip(gescore_notes[:-1], gescore_notes[1:])]
     adj_timings = adjust_numbers_to_sum(original_timings, bar_time)
@@ -6727,7 +6771,8 @@ def align_escore_notes_to_bars(escore_notes,
       nidx += 1
 
     if next_bar:
-      delta = escore_notes[next_bar[1]][1]-escore_notes[next_bar[1]-1][1]
+      delta = escore[next_bar[1]][1]-escore[next_bar[1]-1][1]
+      
     bcount += 1
 
   #=============================================================================
@@ -11293,28 +11338,83 @@ def system_memory_utilization(return_dict=False):
 
 ###################################################################################
 
+def system_cpus_utilization(return_dict=False):
+
+    if return_dict:
+        return {'num_cpus': psutil.cpu_count(),
+                'cpus_util': psutil.cpu_percent()
+                }
+
+    else:
+        print('Number of CPUs:', psutil.cpu_count())
+        print('CPUs utilization:', psutil.cpu_percent())
+
+###################################################################################
+
 def create_files_list(datasets_paths=['./'],
                       files_exts=['.mid', '.midi', '.kar', '.MID', '.MIDI', '.KAR'],
+                      max_num_files_per_dir=-1,
+                      randomize_dir_files=False,
+                      max_total_files=-1,
                       randomize_files_list=True,
+                      check_for_dupes=False,
+                      use_md5_hashes=False,
+                      return_dupes=False,
                       verbose=True
                      ):
+    
     if verbose:
         print('=' * 70)
         print('Searching for files...')
         print('This may take a while on a large dataset in particular...')
         print('=' * 70)
 
-    filez_set = defaultdict(None)
-
     files_exts = tuple(files_exts)
     
-    for dataset_addr in tqdm.tqdm(datasets_paths, disable=not verbose):
-        for dirpath, dirnames, filenames in os.walk(dataset_addr):
-            for file in filenames:
-                if file not in filez_set and file.endswith(files_exts):
-                    filez_set[os.path.join(dirpath, file)] = None
-    
-    filez = list(filez_set.keys())
+    filez_set = defaultdict(None)
+    dupes_list = []
+ 
+    for dataset_addr in datasets_paths:
+        
+        print('=' * 70)
+        print('Processing', dataset_addr)
+        print('=' * 70)
+        
+    for dirpath, dirnames, filenames in tqdm.tqdm(os.walk(dataset_addr), disable=not verbose):
+            
+            if randomize_dir_files:
+                random.shuffle(filenames)
+                
+            if max_num_files_per_dir > 0:
+                max_num_files = max_num_files_per_dir
+                
+            else:
+                max_num_files = len(filenames)
+                
+            for file in filenames[:max_num_files]:
+                if file.endswith(files_exts):
+                    if check_for_dupes:
+                    
+                        if use_md5_hashes:
+                            md5_hash = hashlib.md5(open(os.path.join(dirpath, file), 'rb').read()).hexdigest()
+                            
+                            if md5_hash not in filez_set:
+                                filez_set[md5_hash] = os.path.join(dirpath, file)
+                            
+                            else:
+                                dupes_list.append(os.path.join(dirpath, file))
+                                
+                        else:
+                            if file not in filez_set:
+                                filez_set[file] = os.path.join(dirpath, file)
+                            
+                            else:
+                                dupes_list.append(os.path.join(dirpath, file))
+                    else:
+                        fpath = os.path.join(dirpath, file)
+                        filez_set[fpath] = fpath                              
+
+    filez = list(filez_set.values())
 
     if verbose:
         print('Done!')
@@ -11334,6 +11434,7 @@ def create_files_list(datasets_paths=['./'],
                 
         if verbose:
             print('Found', len(filez), 'files.')
+            print('Skipped', len(dupes_list), 'duplicate files.')
             print('=' * 70)
  
     else:
@@ -11341,8 +11442,20 @@ def create_files_list(datasets_paths=['./'],
             print('Could not find any files...')
             print('Please check dataset dirs and files extensions...')
             print('=' * 70)
+    
+    if max_total_files > 0:     
+        if return_dupes:
+            return filez[:max_total_files], dupes_list
         
-    return filez
+        else:
+            return filez[:max_total_files]
+    
+    else:
+        if return_dupes:
+            return filez, dupes_list
+        
+        else:
+            return filez
 
 ###################################################################################
 
@@ -12163,8 +12276,16 @@ def escore_notes_pitches_chords_signature(escore_notes,
                                           sort_by_counts=False, 
                                           use_full_chords=False
                                          ):
+    
+    if use_full_chords:
+        CHORDS = ALL_CHORDS_FULL
+        
+    else:
+        CHORDS = ALL_CHORDS_SORTED
+    
+    max_patch = max(0, min(128, max_patch))
 
-    escore_notes = [e for e in escore_notes if e[6] <= max_patch % 129]
+    escore_notes = [e for e in escore_notes if e[6] <= max_patch]
 
     if escore_notes:
 
@@ -12173,7 +12294,7 @@ def escore_notes_pitches_chords_signature(escore_notes,
         sig = []
         dsig = []
         
-        drums_offset = 321 + 128
+        drums_offset = len(CHORDS) + 128
         
         bad_chords_counter = 0
         
@@ -12190,10 +12311,10 @@ def escore_notes_pitches_chords_signature(escore_notes,
                 tones_chord = sorted(set([p % 12 for p in pitches]))
                      
                 try:
-                    sig_token = ALL_CHORDS_SORTED.index(tones_chord) + 128
+                    sig_token = CHORDS.index(tones_chord) + 128
                 except:
                     checked_tones_chord = check_and_fix_tones_chord(tones_chord, use_full_chords=use_full_chords)
-                    sig_token = ALL_CHORDS_SORTED.index(checked_tones_chord) + 128
+                    sig_token = CHORDS.index(checked_tones_chord) + 128
                     bad_chords_counter += 1
                     
               elif len(pitches) == 1:
@@ -12225,6 +12346,571 @@ def escore_notes_pitches_chords_signature(escore_notes,
 
     else:
         return []
+
+###################################################################################
+
+def compute_sustain_intervals(events):
+
+    intervals = []
+    pedal_on = False
+    current_start = None
+    
+    for t, cc in events:
+        if not pedal_on and cc >= 64:
+
+            pedal_on = True
+            current_start = t
+        elif pedal_on and cc < 64:
+
+            pedal_on = False
+            intervals.append((current_start, t))
+            current_start = None
+
+    if pedal_on:
+        intervals.append((current_start, float('inf')))
+
+    merged = []
+    
+    for interval in intervals:
+        if merged and interval[0] <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], interval[1]))
+        else:
+            merged.append(interval)
+    return merged
+
+###################################################################################
+
+def apply_sustain_to_ms_score(score):
+
+    sustain_by_channel = {}
+    
+    for track in score[1:]:
+        for event in track:
+            if event[0] == 'control_change' and event[3] == 64:
+                channel = event[2]
+                sustain_by_channel.setdefault(channel, []).append((event[1], event[4]))
+    
+    sustain_intervals_by_channel = {}
+    
+    for channel, events in sustain_by_channel.items():
+        events.sort(key=lambda x: x[0])
+        sustain_intervals_by_channel[channel] = compute_sustain_intervals(events)
+    
+    global_max_off = 0
+    
+    for track in score[1:]:
+        for event in track:
+            if event[0] == 'note':
+                global_max_off = max(global_max_off, event[1] + event[2])
+                
+    for channel, intervals in sustain_intervals_by_channel.items():
+        updated_intervals = []
+        for start, end in intervals:
+            if end == float('inf'):
+                end = global_max_off
+            updated_intervals.append((start, end))
+        sustain_intervals_by_channel[channel] = updated_intervals
+        
+    if sustain_intervals_by_channel:
+        
+        for track in score[1:]:
+            for event in track:
+                if event[0] == 'note':
+                    start = event[1]
+                    nominal_dur = event[2]
+                    nominal_off = start + nominal_dur
+                    channel = event[3]
+                    
+                    intervals = sustain_intervals_by_channel.get(channel, [])
+                    effective_off = nominal_off
+        
+                    for intv_start, intv_end in intervals:
+                        if intv_start < nominal_off < intv_end:
+                            effective_off = intv_end
+                            break
+                    
+                    effective_dur = effective_off - start
+                    
+                    event[2] = effective_dur
+
+    return score
+    
+###################################################################################
+
+def copy_file(src_file: str, trg_dir: str, add_subdir: bool = False, verbose: bool = False):
+   
+    src_path = Path(src_file)
+    target_directory = Path(trg_dir)
+
+    if not src_path.is_file():
+        if verbose:
+            print("Source file does not exist or is not a file.")
+        
+        return None
+
+    target_directory.mkdir(parents=True, exist_ok=True)
+    
+    if add_subdir:
+        first_letter = src_path.name[0]
+        target_directory = target_directory / first_letter
+        target_directory.mkdir(parents=True, exist_ok=True)
+
+    destination = target_directory / src_path.name
+
+    try:
+        shutil.copy2(src_path, destination)
+
+    except:
+        if verbose:
+            print('File could not be copied!')
+            
+        return None
+    
+    if verbose:
+        print('File copied!')
+
+    return None
+
+###################################################################################
+
+def escore_notes_even_timings(escore_notes, in_place=True):
+
+    if in_place:
+        for e in escore_notes:
+            if e[1] % 2 != 0:
+                e[1] += 1
+    
+            if e[2] % 2 != 0:
+                e[2] += 1
+
+        return []
+
+    else:
+        escore = copy.deepcopy(escore_notes)
+        
+        for e in escore:
+            if e[1] % 2 != 0:
+                e[1] += 1
+    
+            if e[2] % 2 != 0:
+                e[2] += 1
+
+        return escore
+
+###################################################################################
+
+def both_chords(chord1, chord2, merge_threshold=2):
+    
+    if len(chord1) > 1 and len(chord2) > 0 and chord2[0][1]-chord1[0][1] <= merge_threshold:
+        return True
+    
+    elif len(chord1) > 0 and len(chord2) > 1 and chord2[0][1]-chord1[0][1] <= merge_threshold:
+        return True
+
+    else:
+        return False
+
+def merge_chords(chord1, chord2, sort_drums_last=False):
+
+    mchord = chord1
+
+    seen = []
+
+    for e in chord2:
+        if tuple([e[4], e[6]]) not in seen:
+            mchord.append(e)
+            seen.append(tuple([e[4], e[6]]))
+
+    for e in mchord[1:]:
+        e[1] = mchord[0][1]
+    
+    if sort_drums_last:
+        mchord.sort(key=lambda x: (-x[4], x[6]) if x[6] != 128 else (x[6], -x[4]))
+
+    else:
+        mchord.sort(key=lambda x: (-x[4], x[6]))
+
+    return mchord
+    
+def merge_escore_notes(escore_notes, merge_threshold=2, sort_drums_last=False):
+
+    cscore = chordify_score([1000, escore_notes])
+    
+    merged_chords = []
+    merged_chord = cscore[0]
+    
+    for i in range(1, len(cscore)):
+
+        cchord = cscore[i]
+
+        if both_chords(merged_chord, cchord, merge_threshold=merge_threshold):
+            merged_chord = merge_chords(merged_chord, cchord, sort_drums_last=sort_drums_last)
+
+        else:
+            merged_chords.append(merged_chord)
+            merged_chord = cchord
+            
+    return flatten(merged_chords)
+
+###################################################################################
+
+def solo_piano_escore_notes_tokenized(escore_notes,
+                                      compress_start_times=True,
+                                      encode_velocities=False,
+                                      verbose=False
+                                      ):
+
+    if verbose:
+        print('=' * 70)
+        print('Encoding MIDI...')
+    
+    sp_escore_notes = solo_piano_escore_notes(escore_notes)
+    zscore = recalculate_score_timings(sp_escore_notes)
+    dscore = delta_score_notes(zscore, timings_clip_value=127)
+    
+    score = []
+    
+    notes_counter = 0
+    chords_counter = 1
+    
+    for i, e in enumerate(dscore):
+        
+        dtime = e[1]
+        dur = e[2]
+        ptc = e[4]
+        vel = e[5]
+
+        if compress_start_times:
+            
+            if i == 0:
+                score.extend([0, dur+128, ptc+256])
+                
+                if encode_velocities:
+                    score.append(vel+384)
+                    
+            else:
+                if dtime == 0:
+                    score.extend([dur+128, ptc+256])
+
+                else:
+                    score.extend([dtime, dur+128, ptc+256])
+                    
+                if encode_velocities:
+                    score.append(vel+384)
+                    
+            if dtime != 0:
+                chords_counter += 1
+
+        else:
+            score.extend([dtime, dur+128, ptc+256])
+
+            if encode_velocities:
+                score.append(vel+384)
+
+            if dtime != 0:
+                chords_counter += 1
+                
+        notes_counter += 1
+
+    if verbose:
+        print('Done!')
+        print('=' * 70)
+        
+        print('Source MIDI composition has', len(zscore), 'notes')
+        print('Source MIDI composition has', len([d[1] for d in dscore if d[1] !=0 ])+1, 'chords')
+        print('-' * 70)
+        print('Encoded sequence has', notes_counter, 'pitches')
+        print('Encoded sequence has', chords_counter, 'chords')
+        print('-' * 70)
+        print('Final encoded sequence has', len(score), 'tokens')
+        print('=' * 70)
+        
+    return score
+
+###################################################################################
+
+def equalize_closest_elements_dynamic(seq,
+                                      min_val=128,
+                                      max_val=256,
+                                      splitting_factor=1.5,
+                                      tightness_threshold=0.15
+                                      ):
+
+    candidates = [(i, x) for i, x in enumerate(seq) if min_val <= x <= max_val]
+    
+    if len(candidates) < 2:
+        return seq.copy()
+
+    sorted_candidates = sorted(candidates, key=lambda pair: pair[1])
+    candidate_values = [val for _, val in sorted_candidates]
+    
+    differences = [candidate_values[i+1] - candidate_values[i] for i in range(len(candidate_values)-1)]
+    
+    def median(lst):
+        
+        n = len(lst)
+        sorted_lst = sorted(lst)
+        mid = n // 2
+        
+        if n % 2 == 0:
+            return (sorted_lst[mid - 1] + sorted_lst[mid]) / 2.0
+            
+        else:
+            return sorted_lst[mid]
+    
+    med_diff = median(differences)
+
+    split_indices = [i for i, diff in enumerate(differences) if diff > splitting_factor * med_diff]
+    
+    clusters = []
+    
+    if split_indices:
+        start = 0
+        for split_index in split_indices:
+            clusters.append(sorted_candidates[start:split_index+1])
+            start = split_index + 1
+        clusters.append(sorted_candidates[start:])
+        
+    else:
+        clusters = [sorted_candidates]
+    
+
+    valid_clusters = [cluster for cluster in clusters if len(cluster) >= 2]
+    if not valid_clusters:
+        return seq.copy()
+
+    def cluster_spread(cluster):
+        values = [val for (_, val) in cluster]
+        return max(values) - min(values)
+    
+    valid_clusters.sort(key=lambda cluster: (len(cluster), -cluster_spread(cluster)), reverse=True)
+    selected_cluster = valid_clusters[0]
+
+    allowed_range_width = max_val - min_val
+    spread = cluster_spread(selected_cluster)
+    ratio = spread / allowed_range_width
+    
+    if ratio > tightness_threshold:
+        return seq.copy()
+
+    cluster_values = [val for (_, val) in selected_cluster]
+    equal_value = sum(cluster_values) // len(cluster_values)
+    
+
+    result = list(seq)
+    for idx, _ in selected_cluster:
+        result[idx] = equal_value
+    
+    return result
+
+###################################################################################
+
+def chunk_list(lst, chunk_size):
+    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+
+###################################################################################
+
+def compress_tokens_sequence(seq, 
+                             min_val=128, 
+                             max_val=256, 
+                             group_size=2, 
+                             splitting_factor=1.5, 
+                             tightness_threshold=0.15
+                            ):
+    
+    comp_seq = equalize_closest_elements_dynamic(seq, 
+                                                 min_val, 
+                                                 max_val, 
+                                                 splitting_factor=splitting_factor, 
+                                                 tightness_threshold=tightness_threshold
+                                                 )
+
+    seq_split = sorted(chunk_list(comp_seq, group_size), key=lambda x: (-x[0], -x[1]))
+
+    seq_grouped = [[[k]] + [vv[1:] for vv in v] for k, v in groupby(seq_split, key=lambda x: x[0])]
+
+    return flatten(flatten(sorted(seq_grouped, key=lambda x: -x[1][0])))
+
+###################################################################################
+
+def merge_adjacent_pairs(values_counts):
+   
+    merged = []
+    i = 0
+    
+    while i < len(values_counts):
+
+        if i < len(values_counts) - 1:
+            value1, count1 = values_counts[i]
+            value2, count2 = values_counts[i + 1]
+            
+            if value2 - value1 == 1:
+                if count2 > count1:
+                    merged_value = value2
+                    
+                else:
+                    merged_value = value1
+
+                merged_count = count1 + count2
+                merged.append((merged_value, merged_count))
+
+                i += 2
+                
+                continue
+
+        merged.append(values_counts[i])
+        
+        i += 1
+        
+    return merged
+
+###################################################################################
+
+def merge_escore_notes_start_times(escore_notes, num_merges=1):
+
+    new_dscore = delta_score_notes(escore_notes)
+
+    times = [e[1] for e in new_dscore if e[1] != 0]
+    times_counts = sorted(Counter(times).most_common())
+
+    prev_counts = []
+    new_times_counts = times_counts
+    
+    mcount = 0
+    
+    while prev_counts != new_times_counts:
+        prev_counts = new_times_counts
+        new_times_counts = merge_adjacent_pairs(new_times_counts)
+        
+        mcount += 1
+
+        if mcount == num_merges:
+            break
+
+    gtimes = [r[0] for r in new_times_counts]
+
+    for e in new_dscore:
+        if e[1] > 0:
+            e[1] = find_closest_value(gtimes, e[1])[0]
+            e[2] -= num_merges
+
+    return delta_score_to_abs_score(new_dscore)
+
+###################################################################################
+
+def multi_instrumental_escore_notes_tokenized(escore_notes, compress_seq=False):
+
+    melody_chords = []
+
+    pe = escore_notes[0]
+    
+    for i, e in enumerate(escore_notes):
+    
+        dtime = max(0, min(255, e[1]-pe[1]))
+        
+        dur = max(0, min(255, e[2]))
+        
+        cha = max(0, min(15, e[3]))
+    
+        if cha == 9:
+          pat = 128
+        
+        else:
+          pat = max(0, min(127, e[6]))
+        
+        ptc = max(0, min(127, e[4]))
+        
+        vel = max(8, min(127, e[5]))
+        velocity = round(vel / 15)-1
+        
+        dur_vel = (8 * dur) + velocity
+        pat_ptc = (129 * pat) + ptc
+
+        if compress_seq:
+            if dtime != 0 or i == 0:
+                melody_chords.extend([dtime, dur_vel+256, pat_ptc+2304])
+
+            else:
+                melody_chords.extend([dur_vel+256, pat_ptc+2304])
+
+        else:
+            melody_chords.extend([dtime, dur_vel+256, pat_ptc+2304])
+        
+        pe = e
+
+    return melody_chords
+
+###################################################################################
+
+def merge_counts(data, return_lists=True):
+    
+    merged = defaultdict(int)
+    
+    for value, count in data:
+        merged[value] += count
+
+    if return_lists:
+        return [[k, v] for k, v in merged.items()]
+
+    else:
+        return list(merged.items())
+    
+###################################################################################
+
+def convert_escore_notes_pitches_chords_signature(signature, convert_to_full_chords=True):
+
+    if convert_to_full_chords:
+        SRC_CHORDS = ALL_CHORDS_SORTED
+        TRG_CHORDS = ALL_CHORDS_FULL
+
+    else:
+        SRC_CHORDS = ALL_CHORDS_FULL
+        TRG_CHORDS = ALL_CHORDS_SORTED
+
+    cdiff = len(TRG_CHORDS) - len(SRC_CHORDS)
+
+    pitches_counts = [c for c in signature if -1 < c[0] < 128]
+    chords_counts = [c for c in signature if 127 < c[0] < len(SRC_CHORDS)+128]
+    drums_counts = [[c[0]+cdiff, c[1]] for c in signature if len(SRC_CHORDS)+127 < c[0] < len(SRC_CHORDS)+256]
+    bad_chords_count = [c for c in signature if c[0] == -1]
+
+    new_chords_counts = []
+    
+    for c in chords_counts:
+        tones_chord = SRC_CHORDS[c[0]-128]
+
+        if tones_chord not in TRG_CHORDS:
+            tones_chord = check_and_fix_tones_chord(tones_chord, use_full_chords=convert_to_full_chords)
+            bad_chords_count[0][1] += 1
+            
+        new_chords_counts.append([TRG_CHORDS.index(tones_chord)+128, c[1]])
+
+    return pitches_counts + merge_counts(new_chords_counts) + drums_counts + bad_chords_count
+
+###################################################################################
+
+def convert_bytes_in_nested_list(lst, encoding='utf-8', errors='ignore'):
+    
+    new_list = []
+    
+    for item in lst:
+        if isinstance(item, list):
+            new_list.append(convert_bytes_in_nested_list(item))
+            
+        elif isinstance(item, bytes):
+            new_list.append(item.decode(encoding, errors=errors))
+            
+        else:
+            new_list.append(item)
+            
+    return new_list
+
+###################################################################################
+
+print('Module loaded!')
+print('=' * 70)
+print('Enjoy! :)')
+print('=' * 70)
 
 ###################################################################################
 # This is the end of the TMIDI X Python module
