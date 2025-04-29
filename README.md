@@ -60,8 +60,12 @@ sigs_data_path = './Monster-MIDI-Dataset/SIGNATURES_DATA/MONSTER_SIGNATURES_DATA
 
 sigs_data = monster_search_and_filter.load_pickle(sigs_data_path)
 sigs_dicts = monster_search_and_filter.load_signatures(sigs_data)
+
+# Please note that you will need at least 80GB RAM or VRAM to run the search
 X, global_union = monster_search_and_filter.precompute_signatures(sigs_dicts)
 
+# IO dirs will be created on the first function run
+# Make sure to put your master MIDIs into created Master-MIDI-Dataset dir
 monster_search_and_filter.search_and_filter(sigs_dicts, X, global_union)
 ```
 
