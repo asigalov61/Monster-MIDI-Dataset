@@ -17,7 +17,7 @@
 !git clone --depth 1 https://github.com/asigalov61/Monster-MIDI-Dataset
 
 !pip install cupy-cuda12x
-!pip install numpy==1.24.4
+!pip install numpy==1.26.4
 !pip install huggingface_hub
 !pip install hf-transfer
 !pip install ipywidgets
